@@ -232,10 +232,52 @@ export class SaccadeEngine {
       this.onAlert?.("⚠️ Out of Frame. Tracking paused.", "severe");
     }
 
-    this.drawVisionOverlay(results, currentX, currentY);
-
     const closedCount = this.perclosHistory.filter(h => h.closed).length;
     const perclos = this.perclosHistory.length > 0 ? closedCount / this.perclosHistory.length : 0;
+
+    // --- LIVE MFI DYNAMIC CALCULATION ---
+    const store = useTelemetryStore.getState();
+    const earBaseline = store.earBaseline || 0.30;
+    const currentEAR = Math.max(0.01, ear);
+    const earFatigueScore = Math.min(100, Math.max(0, ((earBaseline - currentEAR) / earBaseline) * 100));
+
+    const livePERCLOS = perclos > 1 ? perclos : perclos * 100;
+    const perclosScore = Math.min(100, Math.max(0, livePERCLOS));
+
+    const latencyBaseline = store.latencyBaseline || 200;
+    const latencyDelta = Math.max(0, liveSaccadeLatency - latencyBaseline);
+    const latencyFatigueScore = Math.min(100, (latencyDelta / 150) * 100);
+
+    const currentAcoustic = (store.harshBandEnergy / 255.0) * 100;
+
+    let w_visual = 0.70;
+    let w_audio = 0.30;
+    if (cLight < 0.5) {
+      w_visual = 0.20;
+      w_audio = 0.80;
+    }
+
+    const visualScore = (earFatigueScore * 0.4) + (perclosScore * 0.4) + (latencyFatigueScore * 0.2);
+    const calculatedMFI = Math.round((visualScore * w_visual) + (currentAcoustic * w_audio));
+
+    // Force update the store state immediately
+    store.setMFI(calculatedMFI);
+
+    const currentSecond = Math.floor(currentTime / 1000);
+    if ((this as any).lastLogSecond !== currentSecond) {
+       (this as any).lastLogSecond = currentSecond;
+       if (store.isTracking && !outOfFrame) {
+         store.logDataPoint({
+           time: Date.now(),
+           mfi: calculatedMFI,
+           ear: currentEAR,
+           latency: liveSaccadeLatency,
+           harshEnergy: store.harshBandEnergy
+         });
+       }
+    }
+
+    this.drawVisionOverlay(results, currentX, currentY);
 
     const metrics = {
       ear,

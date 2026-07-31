@@ -8,7 +8,7 @@ import { VoiceCheckInModal } from './components/VoiceCheckInModal';
 import { useTelemetryStore } from './store/telemetryStore';
 import { saccadeEngine } from './lib/saccadeEngine';
 import { acousticEngine } from './lib/acousticEngine';
-import { mfiEngine } from './lib/mfiCalculator';
+
 
 function App() {
   const [currentPage, setCurrentPage] = useState<'landing' | 'dashboard'>('landing');
@@ -17,16 +17,13 @@ function App() {
     isTracking, 
     setVisualMetrics, 
     setAcousticMetrics,
-    setMFI,
     addAlert,
-    logDataPoint,
     logGazePoint,
     triggerMicroRest,
     audioMode
   } = useTelemetryStore();
 
   const animationFrameRef = useRef<number>(0);
-  const logTimerRef = useRef<number>(0);
 
   useEffect(() => {
     let active = true;
@@ -52,20 +49,12 @@ function App() {
       saccadeEngine.onResults = (_results, metrics) => {
         setVisualMetrics(metrics.ear, metrics.perclos, metrics.cLight, metrics.liveSaccadeLatency, metrics.outOfFrame);
         
-        if (useTelemetryStore.getState().isCalibrated && !useTelemetryStore.getState().calibrationAnchor) {
-           useTelemetryStore.getState().setCalibrationAnchor(metrics.nosePos);
+        const store = useTelemetryStore.getState();
+        if (store.isCalibrated && !store.calibrationAnchor) {
+           store.setCalibrationAnchor(metrics.nosePos);
         }
 
-        const currentHarsh = acousticEngine.isInitialized ? acousticEngine.getTelemetry().harshBandEnergy : 0;
-        const mfi = mfiEngine.calculateMFI(
-          metrics.liveSaccadeLatency, 
-          metrics.perclos, 
-          metrics.cLight, 
-          currentHarsh,
-          metrics.ear
-        );
-        
-        setMFI(mfi);
+        const mfi = store.mfi;
         acousticEngine.setMitigationLevel(mfi);
 
         if (mfi >= 50) {
@@ -75,17 +64,6 @@ function App() {
         const now = Date.now();
         if (metrics.gazePoint) {
           logGazePoint({ x: metrics.gazePoint.x, y: metrics.gazePoint.y, time: now });
-        }
-
-        if (now - logTimerRef.current > 1000) {
-          logDataPoint({
-            time: now,
-            mfi,
-            ear: metrics.ear,
-            latency: metrics.liveSaccadeLatency,
-            harshEnergy: currentHarsh
-          });
-          logTimerRef.current = now;
         }
       };
 
