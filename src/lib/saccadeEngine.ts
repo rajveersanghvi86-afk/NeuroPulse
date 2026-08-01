@@ -24,6 +24,11 @@ export class SaccadeEngine {
   private canvasCtx: CanvasRenderingContext2D | null = null;
 
   constructor() {
+    // Defer initialization to avoid crashing on load if FaceMesh isn't ready
+  }
+
+  private initFaceMesh() {
+    if (this.faceMesh) return;
     this.faceMesh = new FaceMesh({
       locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
     });
@@ -44,6 +49,7 @@ export class SaccadeEngine {
   }
 
   public async start(videoElement: HTMLVideoElement) {
+    this.initFaceMesh();
     if (this.camera) {
       await this.camera.start();
       return;
