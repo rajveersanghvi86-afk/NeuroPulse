@@ -1,13 +1,6 @@
 import type { Results, Options } from '@mediapipe/face_mesh';
 import { useTelemetryStore } from '../store/telemetryStore';
 
-// @ts-ignore
-const FaceMesh = (window as any).FaceMesh;
-// @ts-ignore
-const Camera = (window as any).Camera;
-// @ts-ignore
-const drawingUtils = (window as any); 
-
 export class SaccadeEngine {
   private faceMesh: any;
   private camera: any = null;
@@ -29,7 +22,7 @@ export class SaccadeEngine {
 
   private initFaceMesh() {
     if (this.faceMesh) return;
-    this.faceMesh = new FaceMesh({
+    this.faceMesh = new (window as any).FaceMesh({
       locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
     });
 
@@ -54,7 +47,7 @@ export class SaccadeEngine {
       await this.camera.start();
       return;
     }
-    this.camera = new Camera(videoElement, {
+    this.camera = new (window as any).Camera(videoElement, {
       onFrame: async () => {
         await this.faceMesh.send({ image: videoElement });
       },
@@ -105,13 +98,13 @@ export class SaccadeEngine {
     ctx.save();
     ctx.clearRect(0, 0, w, h);
     
-    if (results.multiFaceLandmarks && drawingUtils.drawConnectors) {
+    if (results.multiFaceLandmarks && (window as any).drawConnectors) {
       for (const landmarks of results.multiFaceLandmarks) {
-        drawingUtils.drawConnectors(ctx, landmarks, drawingUtils.FACEMESH_TESSELATION, 
+        (window as any).drawConnectors(ctx, landmarks, (window as any).FACEMESH_TESSELATION, 
           { color: '#C0C0C070', lineWidth: 0.5 });
-        drawingUtils.drawConnectors(ctx, landmarks, drawingUtils.FACEMESH_RIGHT_IRIS, 
+        (window as any).drawConnectors(ctx, landmarks, (window as any).FACEMESH_RIGHT_IRIS, 
           { color: '#14B8A6', lineWidth: 1 });
-        drawingUtils.drawConnectors(ctx, landmarks, drawingUtils.FACEMESH_LEFT_IRIS, 
+        (window as any).drawConnectors(ctx, landmarks, (window as any).FACEMESH_LEFT_IRIS, 
           { color: '#14B8A6', lineWidth: 1 });
       }
     }
