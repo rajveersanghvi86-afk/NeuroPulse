@@ -63,11 +63,11 @@ export const LandingPage: React.FC<Props> = ({ onLaunch }) => {
               <BrainCircuit className="w-16 h-16 text-baseline" />
             </div>
             <h1 className="text-7xl font-extrabold tracking-tight text-white drop-shadow-lg">
-              Neuro<span className="text-transparent bg-clip-text bg-gradient-to-r from-baseline to-teal-300">Pulse</span>
+              Neuro<span className="text-baseline">Pulse</span>
             </h1>
           </div>
           <p className="text-2xl text-slate-300 max-w-3xl mx-auto mb-12 font-light leading-relaxed">
-            A privacy-first diagnostic platform that measures, predicts, and actively mitigates cognitive fatigue and acoustic strain in digital workers.
+            A privacy-first app that helps you measure and reduce fatigue during long hours of video calls and digital work.
           </p>
           <motion.button 
             whileHover={{ scale: 1.05 }}
@@ -82,26 +82,32 @@ export const LandingPage: React.FC<Props> = ({ onLaunch }) => {
 
         {/* Medical Principles */}
         <motion.div variants={itemVariants} className="w-full mb-20">
-          <h2 className="text-sm uppercase tracking-[0.2em] text-slate-500 mb-8 text-center font-bold">Biometric Core Principles</h2>
+          <h2 className="text-xl text-slate-400 mb-8 text-center font-semibold">How it works</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
-            <div className="glass-panel p-8 border-t-4 border-t-baseline hover:bg-slate-800/60 transition-colors group rounded-xl">
-              <Activity className="w-10 h-10 text-baseline mb-6 group-hover:scale-110 transition-transform" />
-              <h3 className="text-2xl font-bold text-white mb-3">Eye Reaction Speed</h3>
-              <p className="text-slate-300 leading-relaxed font-light">
+            <div className="flex flex-col items-start p-8 rounded-2xl bg-slate-900/40 border border-slate-800 hover:border-slate-700 transition-colors">
+              <div className="p-3 bg-slate-800 rounded-xl mb-6">
+                <Activity className="w-6 h-6 text-slate-300" />
+              </div>
+              <h3 className="text-xl font-semibold text-white mb-3">Eye Reaction Speed</h3>
+              <p className="text-slate-400 leading-relaxed text-sm">
                 Tracks how quickly your eyes respond. When you're fatigued, your reaction time naturally slows down over the course of the day.
               </p>
             </div>
-            <div className="glass-panel p-8 border-t-4 border-t-warning hover:bg-slate-800/60 transition-colors group rounded-xl">
-              <AudioWaveform className="w-10 h-10 text-warning mb-6 group-hover:scale-110 transition-transform" />
-              <h3 className="text-2xl font-bold text-white mb-3">Audio Stress Monitor</h3>
-              <p className="text-slate-300 leading-relaxed font-light">
+            <div className="flex flex-col items-start p-8 rounded-2xl bg-slate-900/40 border border-slate-800 hover:border-slate-700 transition-colors">
+              <div className="p-3 bg-slate-800 rounded-xl mb-6">
+                <AudioWaveform className="w-6 h-6 text-slate-300" />
+              </div>
+              <h3 className="text-xl font-semibold text-white mb-3">Audio Stress Monitor</h3>
+              <p className="text-slate-400 leading-relaxed text-sm">
                 Keeps an eye on the harsh audio frequencies common in video calls (like Zoom and Teams) that can secretly stress you out.
               </p>
             </div>
-            <div className="glass-panel p-8 border-t-4 border-t-severe hover:bg-slate-800/60 transition-colors group rounded-xl">
-              <Eye className="w-10 h-10 text-severe mb-6 group-hover:scale-110 transition-transform" />
-              <h3 className="text-2xl font-bold text-white mb-3">Blink & Alertness</h3>
-              <p className="text-slate-300 leading-relaxed font-light">
+            <div className="flex flex-col items-start p-8 rounded-2xl bg-slate-900/40 border border-slate-800 hover:border-slate-700 transition-colors">
+              <div className="p-3 bg-slate-800 rounded-xl mb-6">
+                <Eye className="w-6 h-6 text-slate-300" />
+              </div>
+              <h3 className="text-xl font-semibold text-white mb-3">Blink & Alertness</h3>
+              <p className="text-slate-400 leading-relaxed text-sm">
                 Measures how much you blink and keep your eyes open to spot early signs of tiredness and help prevent burnout.
               </p>
             </div>
@@ -110,34 +116,34 @@ export const LandingPage: React.FC<Props> = ({ onLaunch }) => {
 
         {/* Instructions */}
         <motion.div variants={itemVariants} className="w-full max-w-4xl glass-panel p-10 mb-16 border border-slate-700/50 bg-slate-900/40">
-          <h3 className="text-3xl font-bold text-white mb-8 text-center">Standard Operating Procedure</h3>
+          <h3 className="text-3xl font-bold text-white mb-8 text-center">Getting Started</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="flex items-start gap-5">
               <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-baseline/20 text-baseline font-bold text-lg shrink-0 border border-baseline/30">1</span>
               <div>
-                <strong className="text-lg text-white block mb-1">Grant Device Access</strong>
-                <p className="text-slate-400 text-sm">All processing happens strictly in your browser's local RAM. Allow camera and microphone access to begin.</p>
+                <strong className="text-lg text-white block mb-1">Grant Permissions</strong>
+                <p className="text-slate-400 text-sm">Everything stays on your device. Allow camera and microphone access to begin (or just microphone if you prefer audio-only).</p>
               </div>
             </div>
             <div className="flex items-start gap-5">
               <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-baseline/20 text-baseline font-bold text-lg shrink-0 border border-baseline/30">2</span>
               <div>
-                <strong className="text-lg text-white block mb-1">Spatial Calibration</strong>
-                <p className="text-slate-400 text-sm">Complete the 9-point visual calibration. Maintain your head posture aligned with the Cyan Calibration Anchor.</p>
+                <strong className="text-lg text-white block mb-1">Quick Calibration</strong>
+                <p className="text-slate-400 text-sm">Look at the 9 points on the screen to help the app learn your natural eye movements and head posture.</p>
               </div>
             </div>
             <div className="flex items-start gap-5">
               <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-baseline/20 text-baseline font-bold text-lg shrink-0 border border-baseline/30">3</span>
               <div>
-                <strong className="text-lg text-white block mb-1">Call Assistance Mode</strong>
-                <p className="text-slate-400 text-sm">When joining a meeting, select your audio source and toggle "Call Assist Mode" to filter out fatigue-inducing frequencies.</p>
+                <strong className="text-lg text-white block mb-1">Join Your Call</strong>
+                <p className="text-slate-400 text-sm">Select your audio source when joining a meeting to let NeuroPulse monitor the audio for stressful frequencies.</p>
               </div>
             </div>
             <div className="flex items-start gap-5">
               <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-baseline/20 text-baseline font-bold text-lg shrink-0 border border-baseline/30">4</span>
               <div>
-                <strong className="text-lg text-white block mb-1">Session Diagnostics</strong>
-                <p className="text-slate-400 text-sm">Click "Finish Session" when done to export your medical-grade telemetry PDF and gaze heatmap.</p>
+                <strong className="text-lg text-white block mb-1">Review & Relax</strong>
+                <p className="text-slate-400 text-sm">Click "Finish Session" when you're done to see how you did, or take micro-breaks when the app suggests them!</p>
               </div>
             </div>
           </div>
@@ -146,6 +152,11 @@ export const LandingPage: React.FC<Props> = ({ onLaunch }) => {
         <motion.div variants={itemVariants} className="flex items-center gap-3 px-6 py-3 bg-slate-900/80 rounded-full border border-slate-700/50 text-slate-400">
           <ShieldCheck className="w-5 h-5 text-baseline" />
           <span className="font-medium tracking-wide text-sm">100% LOCAL EXECUTION &nbsp;|&nbsp; ZERO CLOUD TELEMETRY</span>
+        </motion.div>
+
+        <motion.div variants={itemVariants} className="mt-16 text-center text-slate-500 text-sm pb-8">
+          <p>Made by Rajveer Sanghvi.</p>
+          <p>&copy; 2026</p>
         </motion.div>
 
       </motion.div>
