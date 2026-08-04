@@ -29,11 +29,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onHome }) => {
   } = useTelemetryStore();
 
   const [showAudioGuide, setShowAudioGuide] = useState(false);
-  const [showTour, setShowTour] = useState(() => localStorage.getItem('np_tour_seen') !== 'true');
+  const [showTour, setShowTour] = useState(true);
 
   const closeTour = () => {
     setShowTour(false);
-    localStorage.setItem('np_tour_seen', 'true');
   };
 
   const handleStartTelemetry = () => {
@@ -147,6 +146,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ onHome }) => {
         </div>
         
         <div className="flex gap-4">
+          <button 
+            onClick={() => setShowTour(true)}
+            className="px-4 py-2.5 rounded-full font-semibold transition-all shadow-glass bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center gap-2"
+          >
+            <HelpCircle className="w-4 h-4" /> Tour
+          </button>
+
           <button 
             onClick={() => setVoiceCheckIn(true)}
             className="px-4 py-2.5 rounded-full font-semibold transition-all shadow-glass bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center gap-2"
