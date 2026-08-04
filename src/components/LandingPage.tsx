@@ -83,33 +83,39 @@ export const LandingPage: React.FC<Props> = ({ onLaunch }) => {
         {/* Medical Principles */}
         <motion.div variants={itemVariants} className="w-full mb-20">
           <h2 className="text-xl text-slate-400 mb-8 text-center font-semibold">How it works</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
-            <div className="flex flex-col items-start p-8 rounded-2xl bg-slate-900/40 border border-slate-800 hover:border-slate-700 transition-colors">
-              <div className="p-3 bg-slate-800 rounded-xl mb-6">
-                <Activity className="w-6 h-6 text-slate-300" />
-              </div>
-              <h3 className="text-xl font-semibold text-white mb-3">Eye Reaction Speed</h3>
-              <p className="text-slate-400 leading-relaxed text-sm">
-                Tracks how quickly your eyes respond. When you're fatigued, your reaction time naturally slows down over the course of the day.
-              </p>
+          <div className="flex flex-col md:flex-row gap-12 justify-center w-full max-w-5xl mx-auto items-start">
+            <div className="flex-1 flex flex-col items-center text-center group">
+               <motion.div whileHover={{ y: -5 }} className="mb-6 text-slate-400 group-hover:text-baseline transition-colors duration-500">
+                  <Activity className="w-12 h-12 stroke-[1.5]" />
+               </motion.div>
+               <h3 className="text-xl font-medium text-white mb-4 tracking-wide">Eye Reaction Speed</h3>
+               <p className="text-slate-400 font-light leading-relaxed text-sm max-w-xs">
+                 Tracks how quickly your eyes respond. When you're fatigued, your reaction time naturally slows down over the course of the day.
+               </p>
             </div>
-            <div className="flex flex-col items-start p-8 rounded-2xl bg-slate-900/40 border border-slate-800 hover:border-slate-700 transition-colors">
-              <div className="p-3 bg-slate-800 rounded-xl mb-6">
-                <AudioWaveform className="w-6 h-6 text-slate-300" />
-              </div>
-              <h3 className="text-xl font-semibold text-white mb-3">Audio Stress Monitor</h3>
-              <p className="text-slate-400 leading-relaxed text-sm">
-                Keeps an eye on the harsh audio frequencies common in video calls (like Zoom and Teams) that can secretly stress you out.
-              </p>
+
+            <div className="hidden md:block w-px h-32 bg-gradient-to-b from-transparent via-slate-700 to-transparent opacity-50 mt-4" />
+
+            <div className="flex-1 flex flex-col items-center text-center group">
+               <motion.div whileHover={{ y: -5 }} className="mb-6 text-slate-400 group-hover:text-warning transition-colors duration-500">
+                  <AudioWaveform className="w-12 h-12 stroke-[1.5]" />
+               </motion.div>
+               <h3 className="text-xl font-medium text-white mb-4 tracking-wide">Audio Stress Monitor</h3>
+               <p className="text-slate-400 font-light leading-relaxed text-sm max-w-xs">
+                 Keeps an eye on the harsh audio frequencies common in video calls (like Zoom and Teams) that can secretly stress you out.
+               </p>
             </div>
-            <div className="flex flex-col items-start p-8 rounded-2xl bg-slate-900/40 border border-slate-800 hover:border-slate-700 transition-colors">
-              <div className="p-3 bg-slate-800 rounded-xl mb-6">
-                <Eye className="w-6 h-6 text-slate-300" />
-              </div>
-              <h3 className="text-xl font-semibold text-white mb-3">Blink & Alertness</h3>
-              <p className="text-slate-400 leading-relaxed text-sm">
-                Measures how much you blink and keep your eyes open to spot early signs of tiredness and help prevent burnout.
-              </p>
+
+            <div className="hidden md:block w-px h-32 bg-gradient-to-b from-transparent via-slate-700 to-transparent opacity-50 mt-4" />
+
+            <div className="flex-1 flex flex-col items-center text-center group">
+               <motion.div whileHover={{ y: -5 }} className="mb-6 text-slate-400 group-hover:text-severe transition-colors duration-500">
+                  <Eye className="w-12 h-12 stroke-[1.5]" />
+               </motion.div>
+               <h3 className="text-xl font-medium text-white mb-4 tracking-wide">Blink & Alertness</h3>
+               <p className="text-slate-400 font-light leading-relaxed text-sm max-w-xs">
+                 Measures how much you blink and keep your eyes open to spot early signs of tiredness and help prevent burnout.
+               </p>
             </div>
           </div>
         </motion.div>
