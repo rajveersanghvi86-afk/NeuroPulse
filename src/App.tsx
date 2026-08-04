@@ -24,6 +24,7 @@ function App() {
   } = useTelemetryStore();
 
   const animationFrameRef = useRef<number>(0);
+  const lastLogSecondRef = useRef<number>(0);
 
   useEffect(() => {
     let active = true;
@@ -31,11 +32,38 @@ function App() {
     const runTelemetryLoop = () => {
       if (!active) return;
 
+      const store = useTelemetryStore.getState();
+
       if (acousticEngine.isInitialized) {
         const { fftData, harshBandEnergy } = acousticEngine.getTelemetry();
         if (fftData) {
           setAcousticMetrics(fftData, harshBandEnergy);
         }
+      }
+
+      // Audio-only MFI calculation and logging when camera is disabled
+      if (store.isTracking && !store.cameraEnabled) {
+         const currentAcoustic = (store.harshBandEnergy / 255.0) * 100;
+         const calculatedMFI = Math.round(currentAcoustic); 
+         
+         store.setMFI(calculatedMFI);
+         acousticEngine.setMitigationLevel(calculatedMFI);
+
+         if (calculatedMFI >= 50) {
+           store.triggerMicroRest();
+         }
+
+         const currentSecond = Math.floor(Date.now() / 1000);
+         if (lastLogSecondRef.current !== currentSecond) {
+            lastLogSecondRef.current = currentSecond;
+            store.logDataPoint({
+              time: Date.now(),
+              mfi: calculatedMFI,
+              ear: store.earBaseline, // dummy value for audio-only
+              latency: store.latencyBaseline, // dummy value for audio-only
+              harshEnergy: store.harshBandEnergy
+            });
+         }
       }
 
       animationFrameRef.current = requestAnimationFrame(runTelemetryLoop);

@@ -54,6 +54,7 @@ export interface TelemetryState {
   calibrationAnchor: HeadAnchor | null;
   sessionGazePoints: GazePoint[];
   audioMode: 'mic' | 'system';
+  cameraEnabled: boolean;
   restBreakEvents: number[];
   
   sessionData: TelemetryDataPoint[];
@@ -73,6 +74,7 @@ export interface TelemetryState {
 
   setCalibrationAnchor: (anchor: HeadAnchor | null) => void;
   setAudioMode: (mode: 'mic' | 'system') => void;
+  setCameraEnabled: (status: boolean) => void;
   logGazePoint: (point: GazePoint) => void;
 
   addAlert: (message: string, type: Alert['type']) => void;
@@ -107,6 +109,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
   calibrationAnchor: null,
   sessionGazePoints: [],
   audioMode: 'mic',
+  cameraEnabled: true,
   restBreakEvents: [],
 
   sessionData: [],
@@ -139,6 +142,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
 
   setCalibrationAnchor: (anchor) => set({ calibrationAnchor: anchor }),
   setAudioMode: (mode) => set({ audioMode: mode }),
+  setCameraEnabled: (status) => set({ cameraEnabled: status }),
   logGazePoint: (point) => set((state) => ({ sessionGazePoints: [...state.sessionGazePoints, point] })),
 
   addAlert: (message, type) => set((state) => {

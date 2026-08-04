@@ -23,10 +23,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ onHome }) => {
     setVoiceCheckIn,
     setCalibrationAnchor,
     audioMode,
-    setAudioMode
+    setAudioMode,
+    cameraEnabled,
+    setCameraEnabled
   } = useTelemetryStore();
 
   const [showAudioGuide, setShowAudioGuide] = useState(false);
+  const [showTour, setShowTour] = useState(() => localStorage.getItem('np_tour_seen') !== 'true');
+
+  const closeTour = () => {
+    setShowTour(false);
+    localStorage.setItem('np_tour_seen', 'true');
+  };
 
   const handleStartTelemetry = () => {
     setIsTracking(!isTracking);
@@ -45,6 +53,47 @@ export const Dashboard: React.FC<DashboardProps> = ({ onHome }) => {
   return (
     <div className="min-h-screen bg-background text-slate-200 p-6 flex flex-col items-center relative">
       
+      {/* Tour Modal Overlay */}
+      {showTour && (
+        <div className="fixed inset-0 z-[200] bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-6">
+          <div className="glass-panel max-w-2xl p-8 relative border border-white/10 flex flex-col">
+            <button onClick={closeTour} className="absolute top-4 right-4 text-slate-400 hover:text-white">
+              <X className="w-6 h-6" />
+            </button>
+            <h2 className="text-2xl font-bold text-white mb-4">Welcome to NeuroPulse!</h2>
+            <p className="text-slate-300 mb-6">Here is a quick tour of how to use the dashboard:</p>
+            <div className="flex flex-col gap-4 text-sm text-slate-200">
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-slate-800 rounded-lg shrink-0"><Mic className="w-5 h-5 text-baseline" /></div>
+                <div><strong>Voice Check:</strong> Run a quick 10-second test to establish your vocal baseline.</div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-slate-800 rounded-lg shrink-0"><RefreshCw className="w-5 h-5 text-baseline" /></div>
+                <div><strong>Recalibrate:</strong> Click this if your head posture changes to reset the tracking anchor.</div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-slate-800 rounded-lg shrink-0"><Activity className="w-5 h-5 text-baseline" /></div>
+                <div><strong>Start Telemetry:</strong> Begins the real-time biometric tracking session.</div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-slate-800 rounded-lg shrink-0"><FileText className="w-5 h-5 text-baseline" /></div>
+                <div><strong>Finish Session:</strong> Ends the session and generates a downloadable PDF and CSV report.</div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-slate-800 rounded-lg shrink-0"><HelpCircle className="w-5 h-5 text-baseline" /></div>
+                <div><strong>Camera & Audio:</strong> Toggle your camera off for audio-only tracking (useful for Zoom), and switch your audio source to capture tab audio instead of your mic.</div>
+              </div>
+            </div>
+            <button 
+              onClick={closeTour} 
+              className="mt-8 px-6 py-3 bg-baseline text-slate-900 rounded-full font-bold self-center hover:bg-baseline/80 transition-colors"
+            >
+              Got it!
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Toast Alerts Overlay */}
       <div className="fixed top-6 right-6 z-[100] flex flex-col gap-3">
         {alerts.map((alert: Alert) => (
@@ -131,20 +180,35 @@ export const Dashboard: React.FC<DashboardProps> = ({ onHome }) => {
       </header>
 
       <div className="w-full max-w-6xl flex justify-end gap-2 mb-4">
-        <div className="flex items-center gap-2 bg-slate-800/80 px-4 py-2 rounded-lg border border-slate-700">
-           <span className="text-sm font-semibold text-slate-300">Audio Source:</span>
-           <select 
-             className="bg-slate-900 text-white border border-slate-600 rounded px-2 py-1 text-sm outline-none cursor-pointer"
-             value={audioMode}
-             onChange={(e) => setAudioMode(e.target.value as 'mic' | 'system')}
-             disabled={isTracking}
-           >
-             <option value="mic">Microphone</option>
-             <option value="system">System (Tab Capture)</option>
-           </select>
-           <button onClick={() => setShowAudioGuide(true)} className="text-slate-400 hover:text-white ml-2">
-             <HelpCircle className="w-4 h-4" />
-           </button>
+        <div className="flex items-center gap-4 bg-slate-800/80 px-4 py-2 rounded-lg border border-slate-700">
+          
+          <div className="flex items-center gap-2 border-r border-slate-700 pr-4">
+             <span className="text-sm font-semibold text-slate-300">Camera:</span>
+             <button 
+               onClick={() => setCameraEnabled(!cameraEnabled)}
+               className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${cameraEnabled ? 'bg-baseline' : 'bg-slate-600'}`}
+               disabled={isTracking}
+             >
+               <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${cameraEnabled ? 'translate-x-5' : 'translate-x-1'}`} />
+             </button>
+             <span className="text-xs text-slate-400">{cameraEnabled ? 'On' : 'Off'}</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+             <span className="text-sm font-semibold text-slate-300">Audio Source:</span>
+             <select 
+               className="bg-slate-900 text-white border border-slate-600 rounded px-2 py-1 text-sm outline-none cursor-pointer"
+               value={audioMode}
+               onChange={(e) => setAudioMode(e.target.value as 'mic' | 'system')}
+               disabled={isTracking}
+             >
+               <option value="mic">Microphone</option>
+               <option value="system">System (Tab Capture)</option>
+             </select>
+             <button onClick={() => setShowAudioGuide(true)} className="text-slate-400 hover:text-white ml-2">
+               <HelpCircle className="w-4 h-4" />
+             </button>
+          </div>
         </div>
       </div>
 

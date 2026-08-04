@@ -84,25 +84,25 @@ export const LandingPage: React.FC<Props> = ({ onLaunch }) => {
         <motion.div variants={itemVariants} className="w-full mb-20">
           <h2 className="text-sm uppercase tracking-[0.2em] text-slate-500 mb-8 text-center font-bold">Biometric Core Principles</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
-            <div className="glass-panel p-8 border-t-4 border-t-baseline hover:bg-slate-800/60 transition-colors group">
+            <div className="glass-panel p-8 border-t-4 border-t-baseline hover:bg-slate-800/60 transition-colors group rounded-xl">
               <Activity className="w-10 h-10 text-baseline mb-6 group-hover:scale-110 transition-transform" />
-              <h3 className="text-2xl font-bold text-white mb-3">Saccadic Latency</h3>
-              <p className="text-slate-400 leading-relaxed">
-                Tracks the speed of your eye movements. As neurological fatigue increases, brainstem delays cause your eyes to take a split second longer to react.
+              <h3 className="text-2xl font-bold text-white mb-3">Eye Reaction Speed</h3>
+              <p className="text-slate-300 leading-relaxed font-light">
+                Tracks how quickly your eyes respond. When you're fatigued, your reaction time naturally slows down over the course of the day.
               </p>
             </div>
-            <div className="glass-panel p-8 border-t-4 border-t-warning hover:bg-slate-800/60 transition-colors group">
+            <div className="glass-panel p-8 border-t-4 border-t-warning hover:bg-slate-800/60 transition-colors group rounded-xl">
               <AudioWaveform className="w-10 h-10 text-warning mb-6 group-hover:scale-110 transition-transform" />
-              <h3 className="text-2xl font-bold text-white mb-3">Acoustic Strain</h3>
-              <p className="text-slate-400 leading-relaxed">
-                Monitors the harsh 2kHz-4kHz frequency bands common in compressed VoIP audio (Zoom/Teams), which silently spikes cortisol and nervous system stress.
+              <h3 className="text-2xl font-bold text-white mb-3">Audio Stress Monitor</h3>
+              <p className="text-slate-300 leading-relaxed font-light">
+                Keeps an eye on the harsh audio frequencies common in video calls (like Zoom and Teams) that can secretly stress you out.
               </p>
             </div>
-            <div className="glass-panel p-8 border-t-4 border-t-severe hover:bg-slate-800/60 transition-colors group">
+            <div className="glass-panel p-8 border-t-4 border-t-severe hover:bg-slate-800/60 transition-colors group rounded-xl">
               <Eye className="w-10 h-10 text-severe mb-6 group-hover:scale-110 transition-transform" />
-              <h3 className="text-2xl font-bold text-white mb-3">PERCLOS Risk</h3>
-              <p className="text-slate-400 leading-relaxed">
-                Measures the percentage of eyelid closure over time to detect early warning signs of micro-sleeps and severe cognitive burnout.
+              <h3 className="text-2xl font-bold text-white mb-3">Blink & Alertness</h3>
+              <p className="text-slate-300 leading-relaxed font-light">
+                Measures how much you blink and keep your eyes open to spot early signs of tiredness and help prevent burnout.
               </p>
             </div>
           </div>

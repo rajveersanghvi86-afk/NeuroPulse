@@ -6,10 +6,10 @@ import { saccadeEngine } from '../lib/saccadeEngine';
 export const WebcamFeed: React.FC = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { isTracking, ear, perclos, latency, lightingQuality, outOfFrame, isCallAssistActive } = useTelemetryStore();
+  const { isTracking, ear, perclos, latency, lightingQuality, outOfFrame, isCallAssistActive, cameraEnabled } = useTelemetryStore();
 
   useEffect(() => {
-    if (isTracking && videoRef.current && canvasRef.current) {
+    if (isTracking && cameraEnabled && videoRef.current && canvasRef.current) {
       saccadeEngine.setCanvas(canvasRef.current);
       
       navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
@@ -26,13 +26,19 @@ export const WebcamFeed: React.FC = () => {
         const stream = videoRef.current.srcObject as MediaStream;
         stream.getTracks().forEach(track => track.stop());
         videoRef.current.srcObject = null;
+        saccadeEngine.stop();
       }
     }
-  }, [isTracking]);
+  }, [isTracking, cameraEnabled]);
 
   return (
     <div className="w-full h-full relative bg-slate-900/50 flex items-center justify-center overflow-hidden">
-      {!isTracking ? (
+      {!cameraEnabled ? (
+        <div className="flex flex-col items-center text-slate-500 gap-2">
+          <CameraOff className="w-12 h-12" />
+          <p>Camera Disabled (Audio-Only Mode)</p>
+        </div>
+      ) : !isTracking ? (
         <div className="flex flex-col items-center text-slate-500 gap-2">
           <CameraOff className="w-12 h-12" />
           <p>Camera Offline</p>
