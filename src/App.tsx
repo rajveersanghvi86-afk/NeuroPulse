@@ -105,7 +105,7 @@ function App() {
       <SessionReportModal />
       <MicroRestModal />
       <VoiceCheckInModal />
-      <Dashboard />
+      <Dashboard onHome={() => setCurrentPage('landing')} />
     </>
   );
 }

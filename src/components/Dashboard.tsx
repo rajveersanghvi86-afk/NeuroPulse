@@ -7,7 +7,11 @@ import { MFIGauge } from './MFIGauge';
 import { MitigationPanel } from './MitigationPanel';
 import { Activity, BrainCircuit, X, RefreshCw, FileText, Mic, ShieldCheck, HelpCircle } from 'lucide-react';
 
-export const Dashboard: React.FC = () => {
+interface DashboardProps {
+  onHome?: () => void;
+}
+
+export const Dashboard: React.FC<DashboardProps> = ({ onHome }) => {
   const { 
     mfi, 
     isTracking, 
@@ -85,9 +89,12 @@ export const Dashboard: React.FC = () => {
       )}
 
       <header className="w-full max-w-6xl mb-8 flex justify-between items-center fade-in">
-        <div className="flex items-center gap-3">
-          <BrainCircuit className="w-8 h-8 text-baseline" />
-          <h1 className="text-2xl font-bold tracking-tight text-white">Neuro<span className="text-baseline">Pulse</span></h1>
+        <div 
+          className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+          onClick={onHome}
+        >
+          <BrainCircuit className="w-10 h-10 text-baseline" />
+          <h1 className="text-4xl font-bold tracking-tight text-white">Neuro<span className="text-baseline">Pulse</span></h1>
         </div>
         
         <div className="flex gap-4">
