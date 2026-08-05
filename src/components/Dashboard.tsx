@@ -182,7 +182,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onHome }) => {
              <button 
                onClick={() => setCameraEnabled(!cameraEnabled)}
                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${cameraEnabled ? 'bg-baseline' : 'bg-slate-600'}`}
-               disabled={isTracking}
              >
                <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${cameraEnabled ? 'translate-x-5' : 'translate-x-1'}`} />
              </button>
@@ -195,7 +194,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onHome }) => {
                className="bg-slate-900 text-white border border-slate-600 rounded px-2 py-1 text-sm outline-none cursor-pointer"
                value={audioMode}
                onChange={(e) => setAudioMode(e.target.value as 'mic' | 'system')}
-               disabled={isTracking}
              >
                <option value="mic">Microphone</option>
                <option value="system">System (Tab Capture)</option>
