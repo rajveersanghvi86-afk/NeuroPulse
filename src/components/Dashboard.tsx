@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Alert } from '../store/telemetryStore';
 import { useTelemetryStore } from '../store/telemetryStore';
 import { WebcamFeed } from './WebcamFeed';
@@ -6,6 +6,8 @@ import { AudioVisualizer } from './AudioVisualizer';
 import { MFIGauge } from './MFIGauge';
 import { MitigationPanel } from './MitigationPanel';
 import { Activity, BrainCircuit, X, RefreshCw, FileText, Mic, ShieldCheck, HelpCircle } from 'lucide-react';
+import { driver } from 'driver.js';
+import 'driver.js/dist/driver.css';
 
 interface DashboardProps {
   onHome?: () => void;
@@ -29,11 +31,34 @@ export const Dashboard: React.FC<DashboardProps> = ({ onHome }) => {
   } = useTelemetryStore();
 
   const [showAudioGuide, setShowAudioGuide] = useState(false);
-  const [showTour, setShowTour] = useState(true);
 
-  const closeTour = () => {
-    setShowTour(false);
+  const startTour = () => {
+    const driverObj = driver({
+      showProgress: true,
+      steps: [
+        { element: '#tour-btn', popover: { title: 'Welcome to NeuroPulse!', description: 'This is an interactive tour to help you understand the dashboard.', side: 'bottom', align: 'start' } },
+        { element: '#voice-check-btn', popover: { title: 'Voice Check', description: 'Run a quick 10-second test to establish your vocal baseline. We use this to detect fatigue through voice analysis.', side: 'bottom', align: 'start' } },
+        { element: '#recalibrate-btn', popover: { title: 'Recalibrate', description: 'Click this if your head posture changes to reset the tracking anchor. This ensures accurate head movement data.', side: 'bottom', align: 'start' } },
+        { element: '#start-telemetry-btn', popover: { title: 'Start Telemetry', description: 'Begins the real-time biometric tracking session. This analyzes your webcam feed and microphone/tab audio.', side: 'bottom', align: 'start' } },
+        { element: '#finish-session-btn', popover: { title: 'Finish Session', description: 'Ends the session and generates a comprehensive downloadable PDF and CSV report.', side: 'bottom', align: 'start' } },
+        { element: '#camera-audio-controls', popover: { title: 'Camera & Audio Controls', description: 'Toggle your camera off for audio-only tracking (useful for Zoom), and switch your audio source to capture tab audio instead of your mic.', side: 'top', align: 'end' } },
+        { element: '#webcam-feed', popover: { title: 'Webcam Feed', description: 'Shows your current webcam feed. Data is processed locally to track your head posture, eye movements (saccades), and facial expressions.', side: 'right', align: 'start' } },
+        { element: '#audio-visualizer', popover: { title: 'Audio Visualizer', description: 'Displays the Psychoacoustic FFT Spectrum (2kHz - 4kHz) to analyze vocal stress and fatigue.', side: 'right', align: 'start' } },
+        { element: '#mfi-gauge', popover: { title: 'Mental Fatigue Index (MFI)', description: 'Real-time calculation of your fatigue level based on combined biometric data.', side: 'left', align: 'start' } },
+        { element: '#active-mitigation', popover: { title: 'Active Mitigation', description: 'Provides real-time alerts and actionable suggestions based on your fatigue level.', side: 'left', align: 'start' } }
+      ]
+    });
+    driverObj.drive();
   };
+
+  useEffect(() => {
+    // Check if tour was already shown in this session to avoid annoyance
+    const tourSeen = sessionStorage.getItem('neuroPulseTourSeen');
+    if (!tourSeen) {
+      startTour();
+      sessionStorage.setItem('neuroPulseTourSeen', 'true');
+    }
+  }, []);
 
   const handleStartTelemetry = () => {
     setIsTracking(!isTracking);
@@ -52,47 +77,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onHome }) => {
   return (
     <div className="min-h-screen bg-background text-slate-200 p-6 flex flex-col items-center relative">
       
-      {/* Tour Modal Overlay */}
-      {showTour && (
-        <div className="fixed inset-0 z-[200] bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-6">
-          <div className="glass-panel max-w-2xl p-8 relative border border-white/10 flex flex-col">
-            <button onClick={closeTour} className="absolute top-4 right-4 text-slate-400 hover:text-white">
-              <X className="w-6 h-6" />
-            </button>
-            <h2 className="text-2xl font-bold text-white mb-4">Welcome to NeuroPulse!</h2>
-            <p className="text-slate-300 mb-6">Here is a quick tour of how to use the dashboard:</p>
-            <div className="flex flex-col gap-4 text-sm text-slate-200">
-              <div className="flex items-start gap-3">
-                <div className="p-2 bg-slate-800 rounded-lg shrink-0"><Mic className="w-5 h-5 text-baseline" /></div>
-                <div><strong>Voice Check:</strong> Run a quick 10-second test to establish your vocal baseline.</div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="p-2 bg-slate-800 rounded-lg shrink-0"><RefreshCw className="w-5 h-5 text-baseline" /></div>
-                <div><strong>Recalibrate:</strong> Click this if your head posture changes to reset the tracking anchor.</div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="p-2 bg-slate-800 rounded-lg shrink-0"><Activity className="w-5 h-5 text-baseline" /></div>
-                <div><strong>Start Telemetry:</strong> Begins the real-time biometric tracking session.</div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="p-2 bg-slate-800 rounded-lg shrink-0"><FileText className="w-5 h-5 text-baseline" /></div>
-                <div><strong>Finish Session:</strong> Ends the session and generates a downloadable PDF and CSV report.</div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="p-2 bg-slate-800 rounded-lg shrink-0"><HelpCircle className="w-5 h-5 text-baseline" /></div>
-                <div><strong>Camera & Audio:</strong> Toggle your camera off for audio-only tracking (useful for Zoom), and switch your audio source to capture tab audio instead of your mic.</div>
-              </div>
-            </div>
-            <button 
-              onClick={closeTour} 
-              className="mt-8 px-6 py-3 bg-baseline text-slate-900 rounded-full font-bold self-center hover:bg-baseline/80 transition-colors"
-            >
-              Got it!
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Toast Alerts Overlay */}
       <div className="fixed top-6 right-6 z-[100] flex flex-col gap-3">
         {alerts.map((alert: Alert) => (
@@ -147,13 +131,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ onHome }) => {
         
         <div className="flex gap-4">
           <button 
-            onClick={() => setShowTour(true)}
+            id="tour-btn"
+            onClick={startTour}
             className="px-4 py-2.5 rounded-full font-semibold transition-all shadow-glass bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center gap-2"
           >
             <HelpCircle className="w-4 h-4" /> Tour
           </button>
 
           <button 
+            id="voice-check-btn"
             onClick={() => setVoiceCheckIn(true)}
             className="px-4 py-2.5 rounded-full font-semibold transition-all shadow-glass bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center gap-2"
           >
@@ -162,6 +148,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onHome }) => {
 
           {isTracking && (
             <button 
+              id="recalibrate-btn"
               onClick={handleRecalibrate}
               className="px-4 py-2.5 rounded-full font-semibold transition-all shadow-glass bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center gap-2"
             >
@@ -170,6 +157,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onHome }) => {
           )}
           
           <button 
+            id="start-telemetry-btn"
             onClick={handleStartTelemetry}
             className={`px-6 py-2.5 rounded-full font-semibold transition-all shadow-glass ${isTracking ? 'bg-severe/20 text-severe hover:bg-severe/30' : 'bg-baseline/20 text-baseline hover:bg-baseline/30'}`}
           >
@@ -177,6 +165,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onHome }) => {
           </button>
           
           <button 
+            id="finish-session-btn"
             onClick={handleFinishSession}
             className="px-4 py-2.5 rounded-full font-semibold transition-all shadow-glass bg-baseline text-slate-900 hover:bg-baseline/80 flex items-center gap-2"
           >
@@ -186,7 +175,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onHome }) => {
       </header>
 
       <div className="w-full max-w-6xl flex justify-end gap-2 mb-4">
-        <div className="flex items-center gap-4 bg-slate-800/80 px-4 py-2 rounded-lg border border-slate-700">
+        <div id="camera-audio-controls" className="flex items-center gap-4 bg-slate-800/80 px-4 py-2 rounded-lg border border-slate-700">
           
           <div className="flex items-center gap-2 border-r border-slate-700 pr-4">
              <span className="text-sm font-semibold text-slate-300">Camera:</span>
@@ -222,10 +211,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onHome }) => {
         
         {/* Left Column - Visuals */}
         <div className="md:col-span-8 flex flex-col gap-6 fade-in" style={{ animationDelay: '0.1s' }}>
-          <div className="glass-panel p-1 rounded-2xl overflow-hidden relative" style={{ height: '480px' }}>
+          <div id="webcam-feed" className="glass-panel p-1 rounded-2xl overflow-hidden relative" style={{ height: '480px' }}>
             <WebcamFeed />
           </div>
-          <div className="glass-panel p-6 h-48">
+          <div id="audio-visualizer" className="glass-panel p-6 h-48">
             <h3 className="text-sm uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-2">
               <Activity className="w-4 h-4" /> Psychoacoustic FFT Spectrum (2kHz - 4kHz)
             </h3>
@@ -235,7 +224,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onHome }) => {
 
         {/* Right Column - Metrics & Mitigation */}
         <div className="md:col-span-4 flex flex-col gap-6 fade-in" style={{ animationDelay: '0.2s' }}>
-          <div className="glass-panel p-6 flex flex-col items-center justify-center relative">
+          <div id="mfi-gauge" className="glass-panel p-6 flex flex-col items-center justify-center relative">
             <h3 className="text-sm uppercase tracking-wider text-slate-400 mb-4 self-start absolute top-6 left-6">
               Fatigue Index (MFI)
             </h3>
@@ -244,7 +233,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onHome }) => {
             </div>
           </div>
           
-          <div className="glass-panel p-6 flex-1">
+          <div id="active-mitigation" className="glass-panel p-6 flex-1">
             <h3 className="text-sm uppercase tracking-wider text-slate-400 mb-4">
               Active Mitigation
             </h3>
