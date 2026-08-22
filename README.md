@@ -7,6 +7,7 @@
 ![Audio Processing](https://img.shields.io/badge/Audio-Web_Audio_API-green)
 ![Privacy](https://img.shields.io/badge/Privacy-100%25_Local_Browser_RAM-brightgreen)
 
+Link: https://rajveersanghvi86-afk.github.io/NeuroPulse/
 ---
 
 ## 🏗️ System Architecture
