@@ -5,6 +5,17 @@ export interface VisionStats {
   faceVisible: boolean;
   /** Current eye openness (Eye Aspect Ratio, both eyes averaged, lightly smoothed). */
   ear: number;
+  /** Live closure on the person's own scale: 0 = normal open, 1 = closed. */
+  closure: number;
+  /** True while a blink / closure is in progress. */
+  eyesClosedNow: boolean;
+  /** Blinks counted since the camera started. */
+  totalBlinks: number;
+  lastBlinkMs: number | null;
+  /** Whether the closed-eye level was measured in calibration (otherwise estimated). */
+  closedCalibrated: boolean;
+  /** Face-tracker frames per second. Below ~15, short blinks can be missed. */
+  fps: number;
   /** The open-eye EAR we compare against (calibrated, or estimated from recent frames). */
   earBaseline: number;
   baselineSource: 'calibrated' | 'adaptive' | 'default';
@@ -79,6 +90,7 @@ export interface ReactionResult {
 export interface CalibrationInfo {
   time: number;
   earBaseline: number;
+  closedEar: number | null;
   ipdBaseline: number;
   anchor: { x: number; y: number };
   neutralYaw: number;

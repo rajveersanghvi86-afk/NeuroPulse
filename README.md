@@ -17,8 +17,8 @@ Live: https://rajveersanghvi86-afk.github.io/NeuroPulse/
 
 | Signal | How | Why it matters |
 |---|---|---|
-| **PERCLOS** | Share of time (60 s window, time-weighted) your eyes are ≥ ~80% closed, from the Eye Aspect Ratio of **both** eyes compared with **your own** open-eye baseline. | One of the best-validated drowsiness measures. Alert ≈ < 8%, drowsy ≈ 15%+. |
-| **Blink duration** | Blink start/end detected with hysteresis; median of normal blinks (< 0.5 s). | Blinks slow down with fatigue. |
+| **PERCLOS** | Share of time (60 s window, time-weighted) your eyes are ≥ 80% closed. Closure is measured on **your own** range, from your open-eye level to your closed-eye level, both taken in calibration, using the Eye Aspect Ratio of **both** eyes (3 lid distances each). | One of the best-validated drowsiness measures. Alert ≈ < 8%, drowsy ≈ 15%+. |
+| **Blink duration** | A blink is counted when the lids pass 50% closure and ends below 30% (hysteresis). Duration = time past half-closure; median of normal blinks (< 0.5 s). | Blinks slow down with fatigue. |
 | **Eyelid droop** | Median open-eye EAR ÷ calibrated baseline. | Heavy lids are an early sign. |
 | **Long closures** | Closures ≥ 0.5 s in the last minute. | Microsleep-like events. |
 | **Reaction time** | A one-minute Psychomotor Vigilance Task (12 trials, 2–6 s random waits, lapses ≥ 500 ms). Compared with your personal baseline, which is saved locally. | Reaction-time slowing and lapses track sleepiness closely. |
@@ -39,8 +39,8 @@ $$MFI = \frac{\sum_i w_i \, c_i \, s_i}{\sum_i w_i \, c_i}$$
 
 ### Calibration
 
-Nine dots. For each one you look, click and hold your gaze for one second. NeuroPulse then records:
-- your open-eye EAR baseline (middle-row targets), your pupil distance and head position (for posture), and your neutral head pose;
+Nine dots (look at each and press Space or click it), then 3 seconds with eyes gently closed. NeuroPulse then records:
+- your open-eye EAR baseline (middle-row targets) and your closed-eye level (MediaPipe's eyelids rarely look fully shut, so fixed thresholds miss blinks), your pupil distance and head position (for posture), and your neutral head pose;
 - a **gaze model**: ridge-regularised linear regression from iris position inside the eye (both eyes) plus head yaw/pitch to screen coordinates. Its accuracy is reported honestly with leave-one-point-out cross-validation.
 
 Without calibration, NeuroPulse estimates the baseline from recent frames (85th percentile of open-eye EAR). Eyelid-droop scores then count for less, and no gaze heatmap is recorded.

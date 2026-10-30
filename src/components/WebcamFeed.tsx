@@ -106,25 +106,39 @@ export const WebcamFeed: React.FC = () => {
                 tone={v.ear / v.earBaseline < 0.75 ? 'warn' : 'ok'}
               />
               <Row
-                label="PERCLOS (60 s)"
+                label="PERCLOS (% time closed, 60 s)"
                 value={warm ? `${(v.perclos * 100).toFixed(1)}%` : `warming up ${Math.round(v.validSeconds)}/20 s`}
                 tone={!warm ? 'muted' : v.perclos > 0.15 ? 'bad' : v.perclos > 0.08 ? 'warn' : 'ok'}
               />
+              <div className="flex justify-between items-center gap-4 mb-1">
+                <span className="text-slate-400">Eyelids</span>
+                <span className="flex items-center gap-2">
+                  <span className="w-14 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                    <span
+                      className={`block h-full ${v.eyesClosedNow ? 'bg-warning' : 'bg-baseline'}`}
+                      style={{ width: `${Math.min(100, Math.max(0, v.closure * 100))}%` }}
+                    />
+                  </span>
+                  <span className={v.eyesClosedNow ? 'text-warning font-bold' : 'text-baseline'}>{v.eyesClosedNow ? 'closed' : 'open'}</span>
+                </span>
+              </div>
+              <Row label="Blinks counted" value={`${v.totalBlinks}${v.lastBlinkMs !== null ? ` · last ${v.lastBlinkMs.toFixed(0)} ms` : ''}`} />
               <Row label="Blinks / min" value={warm ? v.blinkRate.toFixed(0) : '–'} tone={warm ? 'ok' : 'muted'} />
               <Row
-                label="Blink length"
+                label="Median blink"
                 value={v.medianBlinkMs !== null ? `${v.medianBlinkMs.toFixed(0)} ms` : '–'}
-                tone={v.medianBlinkMs === null ? 'muted' : v.medianBlinkMs > 350 ? 'bad' : v.medianBlinkMs > 250 ? 'warn' : 'ok'}
+                tone={v.medianBlinkMs === null ? 'muted' : v.medianBlinkMs > 300 ? 'bad' : v.medianBlinkMs > 200 ? 'warn' : 'ok'}
               />
               <Row
                 label="Head yaw / pitch"
                 value={`${v.yaw.toFixed(0)}° / ${v.pitch.toFixed(0)}°`}
                 tone={Math.abs(v.yaw) > 25 || Math.abs(v.pitch) > 25 ? 'warn' : 'ok'}
               />
+              <Row label="Tracker speed" value={`${v.fps.toFixed(0)} fps`} tone={v.fps < 12 ? 'bad' : v.fps < 20 ? 'warn' : 'ok'} />
               <Row label="Lighting" value={`${Math.round(v.lightQuality * 100)}%`} tone={v.lightQuality < 0.4 ? 'bad' : v.lightQuality < 0.7 ? 'warn' : 'ok'} />
               <div className="mt-2 pt-2 border-t border-white/10 text-[10px] text-slate-500">
                 {calibration
-                  ? `Calibrated${calibration.gazeErrorPct !== null ? ` · gaze error ≈ ${calibration.gazeErrorPct.toFixed(0)}% of screen` : ''}`
+                  ? `Calibrated${calibration.closedEar === null ? ' (closed-eye level estimated)' : ''}${calibration.gazeErrorPct !== null ? ` · gaze error ≈ ${calibration.gazeErrorPct.toFixed(0)}% of screen` : ''}`
                   : `Not calibrated · baseline ${v.baselineSource === 'adaptive' ? 'estimated' : 'default'}`}
               </div>
             </div>

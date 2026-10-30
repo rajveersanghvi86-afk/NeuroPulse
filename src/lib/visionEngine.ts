@@ -8,8 +8,8 @@ export const FACE_MESH_VERSION = '0.4.1633559619';
 
 // MediaPipe FaceMesh landmark indices (refineLandmarks: true adds 468-477 for the irises).
 // "Right"/"left" are the subject's own eyes.
-const RIGHT_EYE_EAR = [33, 160, 158, 133, 153, 144]; // p1..p6
-const LEFT_EYE_EAR = [362, 385, 387, 263, 373, 380];
+const RIGHT_EYE_EAR = [33, 160, 158, 133, 153, 144, 159, 145]; // p1..p6, then lid centres (top, bottom)
+const LEFT_EYE_EAR = [362, 385, 387, 263, 373, 380, 386, 374];
 const RIGHT_EYE_CORNERS = [33, 133]; // both pairs go left -> right in the image
 const LEFT_EYE_CORNERS = [362, 263];
 const RIGHT_IRIS = 468;
@@ -23,15 +23,20 @@ const FACE_RIGHT = 454;
 const WINDOW_MS = 60000;
 const DEFAULT_EAR_BASELINE = 0.28;
 
-// Eye-closure thresholds as a fraction of the open-eye baseline.
-const BLINK_START_RATIO = 0.6; // lids most of the way down
-const BLINK_END_RATIO = 0.72; // hysteresis so noise doesn't split one blink into two
-const PERCLOS_CLOSED_RATIO = 0.45; // ~80% closed (PERCLOS P80)
+// Eye closure is measured on the person's own range: 0 = their open-eye level, 1 = their closed-eye level.
+// MediaPipe's eyelids rarely reach a "fully closed" shape, so a fixed EAR threshold misses many blinks.
+const BLINK_START_CLOSURE = 0.5; // lids at least half way down
+const BLINK_END_CLOSURE = 0.3; // hysteresis so noise doesn't split one blink into two
+const PERCLOS_CLOSURE = 0.8; // PERCLOS P80: at least 80% closed
+/** Closed-eye EAR as a fraction of open, used until the eyes-closed calibration step is done. */
+const DEFAULT_CLOSED_FRACTION = 0.4;
 const LONG_CLOSURE_MS = 500;
 const MAX_HEAD_DEVIATION_DEG = 25; // beyond this the eye shape is too distorted to trust
 
 export interface VisionCalibration {
   earBaseline: number;
+  /** Median EAR with the eyes gently closed, or null if that step was skipped. */
+  closedEar: number | null;
   ipdBaseline: number;
   anchor: { x: number; y: number };
   neutralYaw: number;
@@ -44,6 +49,8 @@ export interface FrameSample {
   time: number;
   faceFound: boolean;
   ear: number;
+  /** 0 = eyes at their normal open level, 1 = at their closed level. */
+  closure: number;
   yaw: number;
   pitch: number;
   roll: number;
@@ -96,6 +103,8 @@ export class VisionEngine {
   private frames: FrameRecord[] = [];
   private blinks: { t: number; dur: number }[] = [];
   private blinkStart: number | null = null;
+  private blinkTotal = 0;
+  private lastBlinkMs: number | null = null;
   private lastFrameT = 0;
   private startedAt = 0;
   private smoothedEar = DEFAULT_EAR_BASELINE;
@@ -187,6 +196,12 @@ export class VisionEngine {
     return this.latest;
   }
 
+  /** EAR treated as "fully closed" for this person. */
+  closedLevel(open: number): number {
+    const c = this.calibration?.closedEar;
+    return c != null && c < open * 0.85 ? c : open * DEFAULT_CLOSED_FRACTION;
+  }
+
   currentBaseline(): { value: number; source: VisionStats['baselineSource'] } {
     if (this.calibration) return { value: this.calibration.earBaseline, source: 'calibrated' };
     if (this.adaptiveBaseline) return { value: this.adaptiveBaseline, source: 'adaptive' };
@@ -209,7 +224,7 @@ export class VisionEngine {
 
     if (!lms || lms.length < 478) {
       this.latest = {
-        time: t, faceFound: false, ear: 0, yaw: 0, pitch: 0, roll: 0, ipd: 0,
+        time: t, faceFound: false, ear: 0, closure: 0, yaw: 0, pitch: 0, roll: 0, ipd: 0,
         nose: { x: 0.5, y: 0.5 }, gaze: null, valid: false, eyesClosed: false,
       };
       this.endBlink(t, false);
@@ -226,10 +241,11 @@ export class VisionEngine {
     const P = (i: number): Pt => ({ x: lms[i].x * W, y: lms[i].y * H, z: lms[i].z * W });
 
     // Eye Aspect Ratio, both eyes, in pixel space so the 4:3 frame doesn't skew it.
+    // Three vertical lid distances (including the lid centres, which move the most in a blink).
     const earOf = (idx: number[]) => {
-      const [p1, p2, p3, p4, p5, p6] = idx.map(P);
+      const [p1, p2, p3, p4, p5, p6, top, bottom] = idx.map(P);
       const w = dist2(p1, p4);
-      return w > 0 ? (dist2(p2, p6) + dist2(p3, p5)) / (2 * w) : 0;
+      return w > 0 ? (dist2(p2, p6) + dist2(p3, p5) + dist2(top, bottom)) / (3 * w) : 0;
     };
     const ear = (earOf(RIGHT_EYE_EAR) + earOf(LEFT_EYE_EAR)) / 2;
 
@@ -268,25 +284,26 @@ export class VisionEngine {
 
     this.updateAdaptiveBaseline(t);
     const baseline = this.currentBaseline().value;
-    const ratio = ear / baseline;
+    const closedEar = this.closedLevel(baseline);
+    const closure = Math.max(0, Math.min(1.2, (baseline - ear) / Math.max(1e-3, baseline - closedEar)));
 
     // Blink state machine.
     if (valid) {
       if (this.blinkStart === null) {
-        if (ratio < BLINK_START_RATIO) this.blinkStart = t;
-      } else if (ratio > BLINK_END_RATIO) {
+        if (closure >= BLINK_START_CLOSURE) this.blinkStart = t;
+      } else if (closure <= BLINK_END_CLOSURE) {
         this.endBlink(t, true);
       }
     } else {
       this.endBlink(t, false);
     }
-    const closed = valid && ratio < PERCLOS_CLOSED_RATIO;
+    const closed = valid && closure >= PERCLOS_CLOSURE;
 
     this.frames.push({ t, dt, valid, closed, inBlink: this.blinkStart !== null, ear });
     if (valid && this.blinkStart === null) this.smoothedEar += (ear - this.smoothedEar) * 0.3;
 
     this.latest = {
-      time: t, faceFound: true, ear, yaw, pitch, roll, ipd, nose, gaze, valid,
+      time: t, faceFound: true, ear, closure, yaw, pitch, roll, ipd, nose, gaze, valid,
       eyesClosed: this.blinkStart !== null,
     };
 
@@ -324,7 +341,11 @@ export class VisionEngine {
     if (this.blinkStart === null) return;
     const dur = t - this.blinkStart;
     this.blinkStart = null;
-    if (record && dur >= 50) this.blinks.push({ t, dur });
+    if (record && dur >= 40) {
+      this.blinks.push({ t, dur });
+      this.blinkTotal++;
+      this.lastBlinkMs = dur;
+    }
   }
 
   private pruneWindows(t: number) {
@@ -416,6 +437,12 @@ export class VisionEngine {
     return {
       faceVisible,
       ear: this.smoothedEar,
+      closure: faceVisible ? latest!.closure : 0,
+      eyesClosedNow: faceVisible && this.blinkStart !== null,
+      totalBlinks: this.blinkTotal,
+      lastBlinkMs: this.lastBlinkMs,
+      closedCalibrated: this.calibration?.closedEar != null,
+      fps: this.frames.filter(f => t - f.t <= 2000).length / 2,
       earBaseline: baseline,
       baselineSource: source,
       perclos: validMs > 0 ? closedMs / validMs : 0,
@@ -446,7 +473,8 @@ export class VisionEngine {
     const win = window as any;
     if (win.drawConnectors) {
       const eyeColor = this.blinkStart !== null ? '#F59E0B' : '#14B8A6';
-      win.drawConnectors(ctx, lms, win.FACEMESH_TESSELATION, { color: '#C0C0C030', lineWidth: 0.5 });
+      // Outline only: the full 2,500-edge tessellation is costly to draw every frame.
+      win.drawConnectors(ctx, lms, win.FACEMESH_FACE_OVAL, { color: '#C0C0C060', lineWidth: 1 });
       win.drawConnectors(ctx, lms, win.FACEMESH_RIGHT_EYE, { color: eyeColor, lineWidth: 1 });
       win.drawConnectors(ctx, lms, win.FACEMESH_LEFT_EYE, { color: eyeColor, lineWidth: 1 });
       win.drawConnectors(ctx, lms, win.FACEMESH_RIGHT_IRIS, { color: '#14B8A6', lineWidth: 1 });
