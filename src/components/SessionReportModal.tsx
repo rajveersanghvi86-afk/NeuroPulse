@@ -248,7 +248,7 @@ export const SessionReportModal: React.FC<{ onClosed?: () => void }> = ({ onClos
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-slate-300">
             <div><strong className="text-white block mb-1">Fatigue Index (MFI)</strong>A 0-100 blend of the measures below, weighted by how reliable each one was. 0-39 low, 40-69 elevated, 70+ high.</div>
             <div><strong className="text-white block mb-1">PERCLOS</strong>The share of time your eyes were at least ~80% closed. It's one of the best-studied drowsiness measures. Alert people are usually under ~8%, and 15%+ is a common drowsiness threshold.</div>
-            <div><strong className="text-white block mb-1">Blink length</strong>Blinks get slower when you're tired. A 30 fps webcam reads alert blinks at roughly 150-250 ms.</div>
+            <div><strong className="text-white block mb-1">Blink length</strong>Blinks get slower when you're tired. It's measured as the time your lids are more than half closed: roughly 80-180 ms when alert.</div>
             <div><strong className="text-white block mb-1">Reaction time</strong>A short Psychomotor Vigilance Task. Slowing compared with your own rested baseline, and lapses (≥500 ms), track sleepiness well.</div>
             <div><strong className="text-white block mb-1">Harsh audio</strong>How loud the 2-4 kHz range was above your room's quiet level, and how treble-heavy it was, averaged over minutes. It's a comfort indicator, not a hearing-safety (SPL) measurement.</div>
             <div><strong className="text-white block mb-1">Limits</strong>Glasses, poor lighting, looking down at a keyboard and head turns all reduce accuracy. Low-confidence periods count for less.</div>

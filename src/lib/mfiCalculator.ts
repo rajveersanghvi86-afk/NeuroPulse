@@ -50,7 +50,7 @@ const WEIGHTS = {
  *
  * Score ranges are based on commonly reported drowsiness markers:
  * - PERCLOS (P80): ~4% when alert, 15%+ is generally treated as drowsy.
- * - Blink duration: alert blinks are ~100-200 ms (a 30 fps webcam reads them a bit longer); 400 ms+ is a strong drowsiness sign.
+ * - Blink duration (time the lids are more than half closed): alert ~80-150 ms; 350 ms+ is a strong drowsiness sign.
  * - Eyelid droop: the open-eye EAR falling 8-30% below the person's own baseline.
  * - Long closures: closures of 0.5 s+ (microsleep-like events).
  * - Reaction time (PVT): slowing of 20-120 ms over the personal baseline, plus lapses (>= 500 ms).
@@ -75,7 +75,7 @@ export function computeMFI({ vision, acoustic, reaction }: MFIInputs): MFIBreakd
   components.push({
     key: 'blinkDuration',
     label: 'Blink duration',
-    score: blinkReady ? scale(vision!.medianBlinkMs!, 200, 400) : null,
+    score: blinkReady ? scale(vision!.medianBlinkMs!, 150, 350) : null,
     weight: blinkReady ? WEIGHTS.blinkDuration * visionConf : 0,
   });
 
