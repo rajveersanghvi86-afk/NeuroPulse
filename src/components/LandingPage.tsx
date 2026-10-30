@@ -75,7 +75,7 @@ export const LandingPage: React.FC<Props> = ({ onLaunch }) => {
             onClick={onLaunch}
             className="group relative px-10 py-5 bg-gradient-to-r from-baseline to-teal-400 text-slate-900 rounded-full font-bold text-xl transition-all shadow-[0_0_40px_rgba(20,184,166,0.4)] hover:shadow-[0_0_60px_rgba(20,184,166,0.6)] flex items-center gap-3 mx-auto"
           >
-            Launch Diagnostic Engine
+            Open Dashboard
             <ArrowRight className="w-6 h-6 group-hover:translate-x-1.5 transition-transform" />
           </motion.button>
         </motion.div>
@@ -88,9 +88,9 @@ export const LandingPage: React.FC<Props> = ({ onLaunch }) => {
                <motion.div whileHover={{ y: -5 }} className="mb-6 text-slate-400 group-hover:text-baseline transition-colors duration-500">
                   <Activity className="w-12 h-12 stroke-[1.5]" />
                </motion.div>
-               <h3 className="text-xl font-medium text-white mb-4 tracking-wide">Eye Reaction Speed</h3>
+               <h3 className="text-xl font-medium text-white mb-4 tracking-wide">Reaction Speed</h3>
                <p className="text-slate-400 font-light leading-relaxed text-sm max-w-xs">
-                 Tracks how quickly your eyes respond. When you're fatigued, your reaction time naturally slows down over the course of the day.
+                 A one-minute reaction test compares you with your own rested baseline. Reaction time measurably slows as you get tired.
                </p>
             </div>
 
@@ -102,7 +102,7 @@ export const LandingPage: React.FC<Props> = ({ onLaunch }) => {
                </motion.div>
                <h3 className="text-xl font-medium text-white mb-4 tracking-wide">Audio Stress Monitor</h3>
                <p className="text-slate-400 font-light leading-relaxed text-sm max-w-xs">
-                 Keeps an eye on the harsh audio frequencies common in video calls (like Zoom and Teams) that can secretly stress you out.
+                 Measures how much loud, treble-heavy (2-4 kHz) sound you're exposed to, and can soften it for calls you join in the browser.
                </p>
             </div>
 
@@ -114,7 +114,7 @@ export const LandingPage: React.FC<Props> = ({ onLaunch }) => {
                </motion.div>
                <h3 className="text-xl font-medium text-white mb-4 tracking-wide">Blink & Alertness</h3>
                <p className="text-slate-400 font-light leading-relaxed text-sm max-w-xs">
-                 Measures how much you blink and keep your eyes open to spot early signs of tiredness and help prevent burnout.
+                 Tracks eye closure (PERCLOS), blink length and eyelid droop. These are among the best-studied early signs of drowsiness.
                </p>
             </div>
           </div>
@@ -135,21 +135,21 @@ export const LandingPage: React.FC<Props> = ({ onLaunch }) => {
               <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-baseline/20 text-baseline font-bold text-lg shrink-0 border border-baseline/30">2</span>
               <div>
                 <strong className="text-lg text-white block mb-1">Quick Calibration</strong>
-                <p className="text-slate-400 text-sm">Look at the 9 points on the screen to help the app learn your natural eye movements and head posture.</p>
+                <p className="text-slate-400 text-sm">Look at and click 9 dots. This learns your normal eye openness, your posture and how your eyes map to the screen.</p>
               </div>
             </div>
             <div className="flex items-start gap-5">
               <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-baseline/20 text-baseline font-bold text-lg shrink-0 border border-baseline/30">3</span>
               <div>
                 <strong className="text-lg text-white block mb-1">Join Your Call</strong>
-                <p className="text-slate-400 text-sm">Select your audio source when joining a meeting to let NeuroPulse monitor the audio for stressful frequencies.</p>
+                <p className="text-slate-400 text-sm">Use your microphone, or share a web call's tab (with tab audio) so NeuroPulse can measure and soften harsh audio.</p>
               </div>
             </div>
             <div className="flex items-start gap-5">
               <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-baseline/20 text-baseline font-bold text-lg shrink-0 border border-baseline/30">4</span>
               <div>
                 <strong className="text-lg text-white block mb-1">Review & Relax</strong>
-                <p className="text-slate-400 text-sm">Click "Finish Session" when you're done to see how you did, or take micro-breaks when the app suggests them!</p>
+                <p className="text-slate-400 text-sm">Take the eye breaks it suggests, run a reaction test now and then, and click "Finish Session" for a summary.</p>
               </div>
             </div>
           </div>
@@ -157,7 +157,7 @@ export const LandingPage: React.FC<Props> = ({ onLaunch }) => {
 
         <motion.div variants={itemVariants} className="flex items-center gap-3 px-6 py-3 bg-slate-900/80 rounded-full border border-slate-700/50 text-slate-400">
           <ShieldCheck className="w-5 h-5 text-baseline" />
-          <span className="font-medium tracking-wide text-sm">100% LOCAL EXECUTION &nbsp;|&nbsp; ZERO CLOUD TELEMETRY</span>
+          <span className="font-medium tracking-wide text-sm">RUNS IN YOUR BROWSER &nbsp;|&nbsp; NOTHING IS UPLOADED</span>
         </motion.div>
 
         <motion.div variants={itemVariants} className="mt-16 text-center text-slate-500 text-sm pb-8">
