@@ -37,6 +37,13 @@ export interface VisionCalibration {
   earBaseline: number;
   /** Median EAR with the eyes gently closed, or null if that step was skipped. */
   closedEar: number | null;
+  /**
+   * How open-eye EAR changes with vertical gaze (lids drop when you look down).
+   * expectedOpen = earBaseline + earGazeSlope * (v - gazeV.middle)
+   */
+  earGazeSlope: number;
+  /** Vertical iris position measured at the top, middle and bottom rows of calibration. */
+  gazeV: { top: number; middle: number; bottom: number } | null;
   ipdBaseline: number;
   anchor: { x: number; y: number };
   neutralYaw: number;
@@ -68,6 +75,8 @@ interface FrameRecord {
   closed: boolean;
   inBlink: boolean;
   ear: number;
+  /** EAR relative to the expected open level for this frame (1 = normally open). */
+  rel: number;
 }
 
 type Pt = { x: number; y: number; z: number };
@@ -104,6 +113,12 @@ export class VisionEngine {
   private blinks: { t: number; dur: number }[] = [];
   private blinkStart: number | null = null;
   private blinkTotal = 0;
+  private longClosureTotal = 0;
+  private recentClosure: number[] = [];
+  private vSmooth: number | null = null;
+  /** Slow average of closure between blinks (0 = eyes at their usual open level). */
+  private restClosure = 0;
+  private lookingDown = false;
   private lastBlinkMs: number | null = null;
   private lastFrameT = 0;
   private startedAt = 0;
@@ -181,6 +196,10 @@ export class VisionEngine {
     this.startedAt = performance.now();
     this.adaptiveBaseline = null;
     this.since = {};
+    this.recentClosure = [];
+    this.vSmooth = null;
+    this.lookingDown = false;
+    this.restClosure = 0;
   }
 
   setCalibration(c: VisionCalibration | null) {
@@ -228,7 +247,7 @@ export class VisionEngine {
         nose: { x: 0.5, y: 0.5 }, gaze: null, valid: false, eyesClosed: false,
       };
       this.endBlink(t, false);
-      this.frames.push({ t, dt, valid: false, closed: false, inBlink: false, ear: 0 });
+      this.frames.push({ t, dt, valid: false, closed: false, inBlink: false, ear: 0, rel: 1 });
       this.sustained('noFace', true, t, 2000, () =>
         this.alert('noFace', 'Face not visible: eye tracking paused.', 'severe', 30000));
       this.measureLight(t, null, W, H);
@@ -280,26 +299,66 @@ export class VisionEngine {
     const pitchDev = pitch - (cal?.neutralPitch ?? 0);
     const pitchLimit = cal ? MAX_HEAD_DEVIATION_DEG : 35; // without calibration we don't know the neutral pitch
     const headOk = Math.abs(yawDev) < MAX_HEAD_DEVIATION_DEG && Math.abs(pitchDev) < pitchLimit;
-    const valid = headOk && this.lightLevel >= 25;
-
     this.updateAdaptiveBaseline(t);
     const baseline = this.currentBaseline().value;
     const closedEar = this.closedLevel(baseline);
-    const closure = Math.max(0, Math.min(1.2, (baseline - ear) / Math.max(1e-3, baseline - closedEar)));
 
-    // Blink state machine.
+    // Your lids sit lower when you look down, so the "normal open" level follows vertical gaze.
+    // Gaze is only updated while the eyes are open, since iris landmarks are unreliable mid-blink.
+    const gv = cal?.gazeV;
+    const expectedFor = (v: number | null) => {
+      if (!cal || !gv || v === null) return baseline;
+      let e = baseline + cal.earGazeSlope * (v - gv.middle);
+      e = Math.max(baseline * 0.7, Math.min(baseline * 1.25, e));
+      return Math.max(e, closedEar + 0.3 * (baseline - closedEar));
+    };
+    const closureFor = (open: number) => Math.max(0, Math.min(1.2, (open - ear) / Math.max(1e-3, open - closedEar)));
+    // Use this frame's gaze unless the eye looks mid-blink, where iris landmarks are unreliable:
+    // then keep the gaze from just before the blink.
+    let expectedOpen = expectedFor(gaze.v);
+    let closure = closureFor(expectedOpen);
+    if (closure < 0.6) {
+      this.vSmooth = this.vSmooth === null ? gaze.v : this.vSmooth + (gaze.v - this.vSmooth) * 0.5;
+    } else {
+      expectedOpen = expectedFor(this.vSmooth);
+      closure = closureFor(expectedOpen);
+    }
+
+    // Looking well below the screen (keyboard, phone): lids drop for reasons other than tiredness.
+    if (gv && this.vSmooth !== null && gv.bottom > gv.top) {
+      this.lookingDown = this.vSmooth - gv.bottom > 0.6 * (gv.bottom - gv.top);
+    } else {
+      this.lookingDown = false;
+    }
+    const valid = headOk && this.lightLevel >= 25 && !this.lookingDown;
+
+    // Blink state machine. Thresholds sit above the current resting level, so drooping eyes
+    // (resting at, say, 35% closure) still have blinks that start and end.
+    const rest = this.restClosure;
+    const startAt = Math.max(BLINK_START_CLOSURE, rest + 0.4);
+    const endAt = Math.max(BLINK_END_CLOSURE, rest + 0.2);
     if (valid) {
       if (this.blinkStart === null) {
-        if (closure >= BLINK_START_CLOSURE) this.blinkStart = t;
-      } else if (closure <= BLINK_END_CLOSURE) {
-        this.endBlink(t, true);
+        if (closure >= startAt) this.blinkStart = t;
+        else this.restClosure += (Math.min(closure, 0.6) - this.restClosure) * Math.min(1, dt / 3000);
+      } else {
+        // Keep adapting slowly during a closure too, so a lasting droop can't leave a "blink" open forever.
+        this.restClosure += (Math.min(closure, 0.6) - this.restClosure) * Math.min(1, dt / 10000);
+        if (closure <= endAt) this.endBlink(t, true);
       }
     } else {
       this.endBlink(t, false);
     }
-    const closed = valid && closure >= PERCLOS_CLOSURE;
+    // PERCLOS uses a 3-frame median so a single noisy frame can't count as "closed".
+    this.recentClosure.push(closure);
+    if (this.recentClosure.length > 3) this.recentClosure.shift();
+    const closureFiltered = this.recentClosure.length === 3 ? median(this.recentClosure) : closure;
+    // Counted as closed if the 3-frame median agrees, or if it's part of a blink that began on an
+    // earlier frame (very short blinks at low frame rates may only have one fully-closed frame).
+    const inEarlierBlink = this.blinkStart !== null && this.blinkStart < t;
+    const closed = valid && closure >= PERCLOS_CLOSURE && (closureFiltered >= PERCLOS_CLOSURE || inEarlierBlink);
 
-    this.frames.push({ t, dt, valid, closed, inBlink: this.blinkStart !== null, ear });
+    this.frames.push({ t, dt, valid, closed, inBlink: this.blinkStart !== null, ear, rel: ear / expectedOpen });
     if (valid && this.blinkStart === null) this.smoothedEar += (ear - this.smoothedEar) * 0.3;
 
     this.latest = {
@@ -344,6 +403,7 @@ export class VisionEngine {
     if (record && dur >= 40) {
       this.blinks.push({ t, dur });
       this.blinkTotal++;
+      if (dur >= LONG_CLOSURE_MS) this.longClosureTotal++;
       this.lastBlinkMs = dur;
     }
   }
@@ -427,8 +487,8 @@ export class VisionEngine {
     const validMin = validMs / 60000;
 
     const { value: baseline, source } = this.currentBaseline();
-    const openEars = valid.filter(f => !f.inBlink && !f.closed).map(f => f.ear);
-    const openness = openEars.length >= 30 ? median(openEars) / baseline : 1;
+    const openRel = valid.filter(f => !f.inBlink && !f.closed).map(f => f.rel);
+    const openness = openRel.length >= 30 ? median(openRel) : 1;
 
     const latest = this.latest;
     const faceVisible = !!latest && latest.faceFound && t - latest.time < 1000;
@@ -440,6 +500,8 @@ export class VisionEngine {
       closure: faceVisible ? latest!.closure : 0,
       eyesClosedNow: faceVisible && this.blinkStart !== null,
       totalBlinks: this.blinkTotal,
+      totalLongClosures: this.longClosureTotal,
+      lookingDown: this.lookingDown,
       lastBlinkMs: this.lastBlinkMs,
       closedCalibrated: this.calibration?.closedEar != null,
       fps: this.frames.filter(f => t - f.t <= 2000).length / 2,

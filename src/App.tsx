@@ -31,9 +31,17 @@ function App() {
         acousticEngine.stop();
         return;
       }
-      if (!res.ok) store().addAlert(res.message, 'severe');
-      else acousticEngine.setCallAssist(store().isCallAssistActive, store().mfi ?? 0);
+      if (!res.ok) {
+        if (res.message) store().addAlert(res.message, 'severe');
+      } else {
+        acousticEngine.setCallAssist(store().isCallAssistActive, store().mfi ?? 0);
+      }
     })();
+
+    // If the browser kept audio paused, the next click anywhere resumes it.
+    const resumeAudio = () => acousticEngine.unlock();
+    window.addEventListener('pointerdown', resumeAudio);
+    let quietSince: number | null = null;
 
     const onVisibility = () => {
       if (document.hidden) {
@@ -50,6 +58,29 @@ function App() {
       const now = Date.now();
       const s = store();
       const acoustic = acousticEngine.sample();
+
+      // Audio diagnostics: tell the user why nothing is being picked up.
+      if (acoustic) {
+        if (acousticEngine.contextState === 'suspended') {
+          s.addAlert('Audio is paused by the browser. Click anywhere on the page to start it.', 'warning');
+        } else if (acoustic.silentForMs > 5000) {
+          s.addAlert(
+            acoustic.source === 'mic'
+              ? 'The microphone is sending pure silence. Check it isn\'t muted (system settings or a mute key) and that the right mic is selected.'
+              : 'The shared tab is silent. Make sure something is playing in it and that "Share tab audio" was ticked.',
+            'warning',
+          );
+        }
+        if (acoustic.source === 'mic' && !acoustic.soundPresent && acoustic.silentForMs === 0) {
+          quietSince ??= now;
+          if (now - quietSince > 60000) {
+            s.addAlert('The mic hears only room noise. If your call is in headphones, the mic can\'t hear it: use "System (Tab Capture)" for web calls.', 'info');
+            quietSince = now + 10 * 60000; // don't repeat for a while
+          }
+        } else if (acoustic.soundPresent) {
+          quietSince = null;
+        }
+      }
 
       if (now - lastMfiT < 250) return;
       lastMfiT = now;
@@ -89,6 +120,14 @@ function App() {
           blinkMs: v ? v.medianBlinkMs : null,
           eyeOpenness: v ? v.eyeOpenness : null,
           acoustic: acoustic ? acoustic.exposure : null,
+          soundDb: acoustic ? acoustic.soundAboveRoomDb : null,
+          tiltDb: acoustic && acoustic.soundPresent ? acoustic.tiltDb : null,
+          scores: Object.fromEntries(breakdown.components.map((c) => [c.key, c.weight > 0 ? c.score : null])),
+          lightQuality: vision?.faceVisible ? vision.lightQuality : null,
+          fps: vision ? vision.fps : null,
+          lookingDown: vision?.lookingDown ?? false,
+          totalBlinks: vision ? vision.totalBlinks : null,
+          totalLongClosures: vision ? vision.totalLongClosures : null,
         });
       }
     }, 100);
@@ -97,6 +136,7 @@ function App() {
       cancelled = true;
       clearInterval(id);
       document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pointerdown', resumeAudio);
       acousticEngine.stop();
     };
   }, [isTracking, audioMode]);

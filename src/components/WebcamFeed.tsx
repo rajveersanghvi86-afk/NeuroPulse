@@ -134,6 +134,7 @@ export const WebcamFeed: React.FC = () => {
                 value={`${v.yaw.toFixed(0)}° / ${v.pitch.toFixed(0)}°`}
                 tone={Math.abs(v.yaw) > 25 || Math.abs(v.pitch) > 25 ? 'warn' : 'ok'}
               />
+              {v.lookingDown && <Row label="Looking down" value="eye metrics paused" tone="warn" />}
               <Row label="Tracker speed" value={`${v.fps.toFixed(0)} fps`} tone={v.fps < 12 ? 'bad' : v.fps < 20 ? 'warn' : 'ok'} />
               <Row label="Lighting" value={`${Math.round(v.lightQuality * 100)}%`} tone={v.lightQuality < 0.4 ? 'bad' : v.lightQuality < 0.7 ? 'warn' : 'ok'} />
               <div className="mt-2 pt-2 border-t border-white/10 text-[10px] text-slate-500">

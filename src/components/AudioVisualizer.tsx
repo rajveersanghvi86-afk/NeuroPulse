@@ -57,19 +57,32 @@ export const AudioVisualizer: React.FC = () => {
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  const above = acoustic ? acoustic.bandDb - acoustic.floorDb : 0;
+  const a = acoustic;
+  const level = a ? Math.min(1, a.soundAboveRoomDb / 40) : 0;
+  const treble = a ? (a.tiltDb > -8 ? 'very bright' : a.tiltDb > -14 ? 'bright' : a.tiltDb > -24 ? 'normal' : 'warm') : '';
 
   return (
-    <div className="w-full h-full relative">
-      <canvas ref={canvasRef} className="w-full h-full" />
-      <div className="absolute top-0 right-0 flex items-center gap-2 bg-slate-900/70 rounded px-2 py-1">
-        <div className={`w-2 h-2 rounded-full ${acoustic?.active ? 'bg-baseline animate-pulse' : 'bg-slate-600'}`} />
-        <span className="text-xs text-slate-300 font-mono">
-          {!isTracking || !acoustic
-            ? 'IDLE'
-            : `2–4 kHz: +${Math.max(0, above).toFixed(0)} dB over room · ${(acoustic.harshShare * 100).toFixed(0)}% of energy · exposure ${acoustic.exposure.toFixed(0)}`}
+    <div className="w-full h-full relative flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-mono text-slate-300">
+        <span className="flex items-center gap-2">
+          <span className={`w-2 h-2 rounded-full ${!isTracking || !a ? 'bg-slate-600' : a.soundPresent ? 'bg-baseline animate-pulse' : 'bg-slate-500'}`} />
+          {!isTracking || !a ? 'IDLE' : a.silentForMs > 2000 ? 'No input (silent)' : a.soundPresent ? 'Sound detected' : 'Quiet (room noise only)'}
         </span>
+        {isTracking && a && (
+          <>
+            <span className="flex items-center gap-2">
+              Level
+              <span className="w-24 h-2 bg-slate-800 rounded-full overflow-hidden inline-block">
+                <span className="block h-full bg-baseline transition-[width] duration-150" style={{ width: `${level * 100}%` }} />
+              </span>
+              +{a.soundAboveRoomDb.toFixed(0)} dB over room
+            </span>
+            {a.soundPresent && <span>Treble: {treble} ({a.tiltDb.toFixed(0)} dB)</span>}
+            <span>Harsh exposure: {a.exposure.toFixed(0)}/100</span>
+          </>
+        )}
       </div>
+      <canvas ref={canvasRef} className="w-full flex-1 min-h-0" />
     </div>
   );
 };

@@ -121,7 +121,21 @@ export const CalibrationModal: React.FC = () => {
       h: s.gaze!.h, v: s.gaze!.v, yaw: s.yaw - neutralYaw, pitch: s.pitch - neutralPitch,
     }));
     const gazeModel = fitGazeModel(gazeSamples);
+
+    // How the open-eye level changes with vertical gaze: least squares over the 9 per-point medians.
+    const perPoint = POINTS.map((_, i) => all.filter((r) => r.point === i).map((r) => r.s)).filter((ss) => ss.length > 0);
+    const pv = perPoint.map((ss) => median(ss.map((s) => s.gaze!.v)));
+    const pe = perPoint.map((ss) => median(ss.map((s) => s.ear)));
+    const mv = pv.reduce((a, b) => a + b, 0) / pv.length;
+    const me = pe.reduce((a, b) => a + b, 0) / pe.length;
+    const sxx = pv.reduce((a, v) => a + (v - mv) ** 2, 0);
+    const earGazeSlope = sxx > 1e-8 ? pv.reduce((a, v, i) => a + (v - mv) * (pe[i] - me), 0) / sxx : 0;
+    const rowV = (y: number) => median(all.filter((r) => POINTS[r.point][1] === y).map((r) => r.s.gaze!.v));
+    const gazeV = { top: rowV(0.1), middle: rowV(0.5), bottom: rowV(0.9) };
+
     fit.current = {
+      earGazeSlope: Number.isFinite(earGazeSlope) ? earGazeSlope : 0,
+      gazeV: [gazeV.top, gazeV.middle, gazeV.bottom].every(Number.isFinite) ? gazeV : null,
       earBaseline,
       ipdBaseline: median(all.map((r) => r.s.ipd)),
       anchor: { x: median(center.map((s) => s.nose.x)), y: median(center.map((s) => s.nose.y)) },

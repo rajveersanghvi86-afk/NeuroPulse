@@ -17,12 +17,12 @@ Live: https://rajveersanghvi86-afk.github.io/NeuroPulse/
 
 | Signal | How | Why it matters |
 |---|---|---|
-| **PERCLOS** | Share of time (60 s window, time-weighted) your eyes are ≥ 80% closed. Closure is measured on **your own** range, from your open-eye level to your closed-eye level, both taken in calibration, using the Eye Aspect Ratio of **both** eyes (3 lid distances each). | One of the best-validated drowsiness measures. Alert ≈ < 8%, drowsy ≈ 15%+. |
+| **PERCLOS** | Share of time (60 s window, time-weighted) your eyes are ≥ 80% closed. Closure is measured on **your own** range, from your open-eye level to your closed-eye level, both taken in calibration, using the Eye Aspect Ratio of **both** eyes (3 lid distances each). The "open" level is adjusted for where you look (lids drop when you look down), time spent looking well below the screen is excluded, and a 3-frame median rejects single noisy frames. | One of the best-validated drowsiness measures. Alert ≈ < 8%, drowsy ≈ 15%+. |
 | **Blink duration** | A blink is counted when the lids pass 50% closure and ends below 30% (hysteresis). Duration = time past half-closure; median of normal blinks (< 0.5 s). | Blinks slow down with fatigue. |
 | **Eyelid droop** | Median open-eye EAR ÷ calibrated baseline. | Heavy lids are an early sign. |
 | **Long closures** | Closures ≥ 0.5 s in the last minute. | Microsleep-like events. |
 | **Reaction time** | A one-minute Psychomotor Vigilance Task (12 trials, 2–6 s random waits, lapses ≥ 500 ms). Compared with your personal baseline, which is saved locally. | Reaction-time slowing and lapses track sleepiness closely. |
-| **Harsh audio exposure** | Power in 2–4 kHz relative to the room's own quiet level, weighted by how much of the energy sits in that band, integrated over a few minutes. | Treble-heavy call audio is tiring. This is a comfort index, not an SPL/hearing-safety measure. |
+| **Harsh audio exposure** | Loudness of 2–4 kHz above the room's own quiet level, weighted by treble balance (2–4 kHz vs 300–2000 Hz), integrated over about a minute. The dashboard also shows a plain "sound detected" level meter, and warns if the input is silent or the browser has paused audio. | Treble-heavy call audio is tiring. This is a comfort index, not an SPL/hearing-safety measure. |
 
 Supporting measurements: **head pose in degrees** (from the 3D face mesh), **face lighting** (mean luminance of the face region), and **posture** relative to calibration (leaning in, head dropped). Frames with the head turned more than 25° or in very poor light are excluded from the eye metrics.
 
@@ -54,6 +54,17 @@ Use **System (Tab Capture)** and share a web call's tab with "Share tab audio". 
 A 20-20-20 eye break is suggested every 20 minutes, or after the MFI has been elevated for 30 s, at most once every 5 minutes.
 
 ---
+
+## Session report
+
+**Finish Session** opens a summary. **Download PDF report** builds a multi-page A4 report in the browser, with:
+- the overall result (and whether fatigue rose by the end) plus personalised recommendations
+- a fatigue timeline with level bands and eye-break markers
+- key measurements against typical alert ranges
+- what drove the index, with a per-period breakdown
+- reaction tests, the gaze heatmap, and data-quality notes
+
+CSV (one row per second, including every signal score) and JSON exports are also available.
 
 ## Known limitations
 
