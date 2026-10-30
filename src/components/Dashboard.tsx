@@ -5,6 +5,7 @@ import { AudioVisualizer } from './AudioVisualizer';
 import { MFIGauge } from './MFIGauge';
 import { MitigationPanel } from './MitigationPanel';
 import { visionEngine } from '../lib/visionEngine';
+import { acousticEngine } from '../lib/acousticEngine';
 import { Activity, BrainCircuit, X, RefreshCw, FileText, Timer, ShieldCheck, HelpCircle } from 'lucide-react';
 import { driver } from 'driver.js';
 import 'driver.js/dist/driver.css';
@@ -68,6 +69,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onHome }) => {
   };
 
   const handleAudioMode = (mode: 'mic' | 'system') => {
+    acousticEngine.unlock();
     if (mode === 'mic') store().setCallAssistActive(false);
     store().setAudioMode(mode);
   };
@@ -138,7 +140,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onHome }) => {
           )}
           <button
             id="start-telemetry-btn"
-            onClick={() => store().setIsTracking(!isTracking)}
+            onClick={() => {
+              // Unlock audio inside the click itself; some browsers keep it silent otherwise.
+              if (!isTracking) acousticEngine.unlock();
+              store().setIsTracking(!isTracking);
+            }}
             className={`px-6 py-2.5 rounded-full font-semibold transition-all shadow-glass ${isTracking ? 'bg-severe/20 text-severe hover:bg-severe/30' : 'bg-baseline/20 text-baseline hover:bg-baseline/30'}`}
           >
             {isTracking ? 'Pause Tracking' : sessionDataLength > 0 ? 'Resume Tracking' : 'Start Tracking'}

@@ -11,6 +11,9 @@ export interface VisionStats {
   eyesClosedNow: boolean;
   /** Blinks counted since the camera started. */
   totalBlinks: number;
+  totalLongClosures: number;
+  /** Looking well below the screen; eye metrics are paused meanwhile. */
+  lookingDown: boolean;
   lastBlinkMs: number | null;
   /** Whether the closed-eye level was measured in calibration (otherwise estimated). */
   closedCalibrated: boolean;
@@ -53,8 +56,18 @@ export interface AcousticStats {
   bandDb: number;
   /** Slowly tracked quiet-room level of the same band, dBFS. */
   floorDb: number;
+  /** Overall level (100 Hz-8 kHz), dBFS. */
+  totalDb: number;
+  /** How far the overall level is above the room's quiet level, dB. */
+  soundAboveRoomDb: number;
+  /** True when there's clearly sound above the room's quiet level. */
+  soundPresent: boolean;
+  /** How long the input has been digitally silent (muted mic, nothing playing), ms. */
+  silentForMs: number;
   /** Share of 100 Hz-8 kHz power that falls in 2-4 kHz (0-1). */
   harshShare: number;
+  /** Treble balance: 2-4 kHz power relative to 300-2000 Hz, dB (higher = more treble-heavy). */
+  tiltDb: number;
   /** Instant harshness score, 0-100. */
   instant: number;
   /** Exposure over the last few minutes (leaky integral of `instant`), 0-100. */
@@ -108,7 +121,20 @@ export interface TelemetryDataPoint {
   blinkRate: number | null;
   blinkMs: number | null;
   eyeOpenness: number | null;
+  /** Harsh-audio exposure 0-100. */
   acoustic: number | null;
+  /** Sound level above the room's quiet level, dB. */
+  soundDb: number | null;
+  /** Treble balance, dB. */
+  tiltDb: number | null;
+  /** Component scores (0-100) at this moment; null = not available. */
+  scores: Partial<Record<MFIComponent['key'], number | null>>;
+  lightQuality: number | null;
+  fps: number | null;
+  lookingDown: boolean;
+  /** Cumulative counters from the eye tracker (reset when the camera restarts). */
+  totalBlinks: number | null;
+  totalLongClosures: number | null;
 }
 
 export interface GazePoint {
