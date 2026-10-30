@@ -4,122 +4,100 @@ import { Dashboard } from './components/Dashboard';
 import { CalibrationModal } from './components/CalibrationModal';
 import { SessionReportModal } from './components/SessionReportModal';
 import { MicroRestModal } from './components/MicroRestModal';
-import { VoiceCheckInModal } from './components/VoiceCheckInModal';
+import { ReactionTestModal } from './components/ReactionTestModal';
 import { useTelemetryStore } from './store/telemetryStore';
-import { saccadeEngine } from './lib/saccadeEngine';
+import { REST_INTERVAL_MS } from './store/telemetryStore';
+import { visionEngine } from './lib/visionEngine';
 import { acousticEngine } from './lib/acousticEngine';
+import { computeMFI, MFI_LEVELS, MFISmoother } from './lib/mfiCalculator';
 
+const SUSTAINED_FATIGUE_MS = 30000;
 
 function App() {
   const [currentPage, setCurrentPage] = useState<'landing' | 'dashboard'>('landing');
-
-  const { 
-    isTracking, 
-    setVisualMetrics, 
-    setAcousticMetrics,
-    addAlert,
-    logGazePoint,
-    triggerMicroRest,
-    audioMode
-  } = useTelemetryStore();
-
-  const animationFrameRef = useRef<number>(0);
-  const lastLogSecondRef = useRef<number>(0);
+  const isTracking = useTelemetryStore((s) => s.isTracking);
+  const audioMode = useTelemetryStore((s) => s.audioMode);
+  const smoother = useRef(new MFISmoother());
 
   useEffect(() => {
-    let active = true;
+    if (!isTracking) return;
+    let cancelled = false;
+    const store = useTelemetryStore.getState;
+    store().beginSession();
 
-    const runTelemetryLoop = () => {
-      if (!active) return;
-
-      const store = useTelemetryStore.getState();
-
-      if (acousticEngine.isInitialized) {
-        const { fftData, harshBandEnergy } = acousticEngine.getTelemetry();
-        if (fftData) {
-          setAcousticMetrics(fftData, harshBandEnergy);
-        }
+    (async () => {
+      const res = await acousticEngine.start(audioMode);
+      if (cancelled) {
+        acousticEngine.stop();
+        return;
       }
+      if (!res.ok) store().addAlert(res.message, 'severe');
+      else acousticEngine.setCallAssist(store().isCallAssistActive, store().mfi ?? 0);
+    })();
 
-      // Audio-only MFI calculation and logging when camera is disabled
-      if (store.isTracking && !store.cameraEnabled) {
-         const currentAcoustic = (store.harshBandEnergy / 255.0) * 100;
-         const calculatedMFI = Math.round(currentAcoustic); 
-         
-         store.setMFI(calculatedMFI);
-         acousticEngine.setMitigationLevel(calculatedMFI);
-
-         if (calculatedMFI >= 50) {
-           store.triggerMicroRest();
-         }
-
-         const currentSecond = Math.floor(Date.now() / 1000);
-         if (lastLogSecondRef.current !== currentSecond) {
-            lastLogSecondRef.current = currentSecond;
-            store.logDataPoint({
-              time: Date.now(),
-              mfi: calculatedMFI,
-              ear: store.earBaseline, // dummy value for audio-only
-              latency: store.latencyBaseline, // dummy value for audio-only
-              harshEnergy: store.harshBandEnergy
-            });
-         }
+    const onVisibility = () => {
+      if (document.hidden) {
+        store().addAlert('NeuroPulse is in a background tab: the browser slows tracking down. Keep it visible in a side window.', 'info');
       }
-
-      animationFrameRef.current = requestAnimationFrame(runTelemetryLoop);
     };
+    document.addEventListener('visibilitychange', onVisibility);
 
-    if (isTracking) {
-      saccadeEngine.onAlert = (msg, type) => {
-        addAlert(msg, type);
-      };
+    let lastMfiT = 0;
+    let lastLogT = 0;
+    let elevatedSince: number | null = null;
 
-      saccadeEngine.onResults = (_results, metrics) => {
-        setVisualMetrics(metrics.ear, metrics.perclos, metrics.cLight, metrics.liveSaccadeLatency, metrics.outOfFrame);
-        
-        const store = useTelemetryStore.getState();
-        if (store.isCalibrated && !store.calibrationAnchor) {
-           store.setCalibrationAnchor(metrics.nosePos);
-        }
+    const id = window.setInterval(() => {
+      const now = Date.now();
+      const s = store();
+      const acoustic = acousticEngine.sample();
 
-        const mfi = store.mfi;
-        acousticEngine.setMitigationLevel(mfi);
+      if (now - lastMfiT < 250) return;
+      lastMfiT = now;
 
-        if (mfi >= 50) {
-          triggerMicroRest();
-        }
-        
-        const now = Date.now();
-        if (metrics.gazePoint) {
-          logGazePoint({ x: metrics.gazePoint.x, y: metrics.gazePoint.y, time: now });
-        }
-      };
+      const vision = s.cameraEnabled ? visionEngine.getStats() : null;
+      const lastReaction = s.reactionResults[s.reactionResults.length - 1];
+      const breakdown = computeMFI({
+        vision,
+        acoustic,
+        reaction: lastReaction
+          ? { medianMs: lastReaction.medianMs, lapses: lastReaction.lapses, ageMs: now - lastReaction.time, baselineMs: s.reactionBaselineMs }
+          : null,
+      });
+      const mfi = breakdown.raw === null ? null : smoother.current.update(breakdown.raw, now);
+      s.setLive({ mfi, breakdown, vision, acoustic });
+      acousticEngine.setMitigationLevel(mfi ?? 0);
 
-      const initAudio = async () => {
-        try {
-          let stream: MediaStream;
-          if (audioMode === 'system') {
-            stream = await navigator.mediaDevices.getDisplayMedia({ audio: true, video: true });
-          } else {
-            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          }
-          if (active) acousticEngine.initialize(stream);
-        } catch (err) {
-          console.error("Audio error:", err);
-          addAlert("⚠️ Audio access denied. Acoustic tracking disabled.", "severe");
-        }
-      };
+      // Rest breaks: sustained elevated fatigue, or the 20-minute 20-20-20 reminder.
+      if (mfi !== null && mfi >= MFI_LEVELS.elevated) {
+        elevatedSince ??= now;
+        if (now - elevatedSince >= SUSTAINED_FATIGUE_MS) s.triggerMicroRest('fatigue');
+      } else {
+        elevatedSince = null;
+      }
+      if (now - s.lastMicroRestTime >= REST_INTERVAL_MS) s.triggerMicroRest('timer');
 
-      initAudio();
-      runTelemetryLoop();
-    } else {
-      saccadeEngine.stop();
-      if (animationFrameRef.current !== undefined) cancelAnimationFrame(animationFrameRef.current);
-    }
+      if (mfi !== null && now - lastLogT >= 1000) {
+        lastLogT = now;
+        const v = vision && vision.warmupDone ? vision : null;
+        s.logDataPoint({
+          time: now,
+          mfi: Math.round(mfi * 10) / 10,
+          confidence: Math.round(breakdown.confidence * 100) / 100,
+          faceVisible: vision?.faceVisible ?? false,
+          perclos: v ? v.perclos : null,
+          blinkRate: v ? v.blinkRate : null,
+          blinkMs: v ? v.medianBlinkMs : null,
+          eyeOpenness: v ? v.eyeOpenness : null,
+          acoustic: acoustic ? acoustic.exposure : null,
+        });
+      }
+    }, 100);
 
     return () => {
-      active = false;
-      if (animationFrameRef.current !== undefined) cancelAnimationFrame(animationFrameRef.current);
+      cancelled = true;
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisibility);
+      acousticEngine.stop();
     };
   }, [isTracking, audioMode]);
 
@@ -130,9 +108,9 @@ function App() {
   return (
     <>
       <CalibrationModal />
-      <SessionReportModal />
+      <SessionReportModal onClosed={() => smoother.current.reset()} />
       <MicroRestModal />
-      <VoiceCheckInModal />
+      <ReactionTestModal />
       <Dashboard onHome={() => setCurrentPage('landing')} />
     </>
   );

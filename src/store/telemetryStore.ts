@@ -1,164 +1,201 @@
 import { create } from 'zustand';
+import type {
+  AcousticStats,
+  Alert,
+  CalibrationInfo,
+  GazePoint,
+  MFIBreakdown,
+  ReactionResult,
+  RestEvent,
+  TelemetryDataPoint,
+  VisionStats,
+} from '../lib/types';
 
-export interface TelemetryDataPoint {
-  time: number;
-  mfi: number;
-  ear: number;
-  latency: number;
-  harshEnergy: number;
+export type {
+  AcousticStats,
+  Alert,
+  CalibrationInfo,
+  GazePoint,
+  MFIBreakdown,
+  ReactionResult,
+  RestEvent,
+  TelemetryDataPoint,
+  VisionStats,
+} from '../lib/types';
+
+const REACTION_BASELINE_KEY = 'neuropulse.reactionBaselineMs';
+const MAX_GAZE_POINTS = 36000; // ~2 hours at 5 Hz
+/** Minimum time between two rest-break prompts. */
+export const REST_DEBOUNCE_MS = 5 * 60 * 1000;
+/** 20-20-20 rule: a reminder every 20 minutes of tracking. */
+export const REST_INTERVAL_MS = 20 * 60 * 1000;
+
+function loadReactionBaseline(): number | null {
+  try {
+    const v = localStorage.getItem(REACTION_BASELINE_KEY);
+    const n = v ? Number(v) : NaN;
+    return Number.isFinite(n) && n > 100 ? n : null;
+  } catch {
+    return null;
+  }
 }
 
-export interface GazePoint {
-  x: number; // Normalized 0-1
-  y: number; // Normalized 0-1
-  time: number;
-}
-
-export interface HeadAnchor {
-  x: number;
-  y: number;
-  z: number;
-}
-
-export interface Alert {
-  id: string;
-  message: string;
-  type: 'warning' | 'severe' | 'info';
-  timestamp: number;
+function saveReactionBaseline(v: number | null) {
+  try {
+    if (v === null) localStorage.removeItem(REACTION_BASELINE_KEY);
+    else localStorage.setItem(REACTION_BASELINE_KEY, String(Math.round(v)));
+  } catch {
+    /* storage unavailable: keep it in memory only */
+  }
 }
 
 export interface TelemetryState {
-  mfi: number;
-  ear: number;
-  perclos: number; 
-  lightingQuality: number; 
-  latency: number;
-  isCalibrated: boolean;
-  outOfFrame: boolean;
-  
-  earBaseline: number;
-  latencyBaseline: number;
-  
-  fftData: Uint8Array | null;
-  harshBandEnergy: number;
+  // Live values
+  mfi: number | null;
+  breakdown: MFIBreakdown | null;
+  vision: VisionStats | null;
+  acoustic: AcousticStats | null;
 
+  // Controls
   isTracking: boolean;
-  isSessionReportOpen: boolean;
-  
-  isCallAssistActive: boolean;
-  showMicroRestModal: boolean;
-  lastMicroRestTime: number; 
-  showVoiceCheckIn: boolean;
-  
-  // Phase 4 States
-  calibrationAnchor: HeadAnchor | null;
-  sessionGazePoints: GazePoint[];
-  audioMode: 'mic' | 'system';
   cameraEnabled: boolean;
-  restBreakEvents: number[];
-  
-  sessionData: TelemetryDataPoint[];
-  alerts: Alert[];
-  
-  setMFI: (val: number) => void;
-  setVisualMetrics: (ear: number, perclos: number, lightingQuality: number, latency: number, outOfFrame: boolean) => void;
-  setCalibrationStatus: (status: boolean) => void;
-  setAcousticMetrics: (fftData: Uint8Array, harshBandEnergy: number) => void;
-  setIsTracking: (status: boolean) => void;
-  setSessionReportOpen: (status: boolean) => void;
-  
-  setCallAssistActive: (status: boolean) => void;
-  triggerMicroRest: () => void;
-  closeMicroRest: () => void;
-  setVoiceCheckIn: (status: boolean) => void;
+  audioMode: 'mic' | 'system';
+  isCallAssistActive: boolean;
 
-  setCalibrationAnchor: (anchor: HeadAnchor | null) => void;
-  setAudioMode: (mode: 'mic' | 'system') => void;
+  // Calibration
+  calibration: CalibrationInfo | null;
+  calibrationSkipped: boolean;
+
+  // Session
+  sessionStart: number | null;
+  sessionData: TelemetryDataPoint[];
+  sessionGazePoints: GazePoint[];
+  restBreakEvents: RestEvent[];
+  reactionResults: ReactionResult[];
+  reactionBaselineMs: number | null;
+
+  // UI
+  isSessionReportOpen: boolean;
+  showMicroRestModal: boolean;
+  microRestReason: RestEvent['reason'];
+  lastMicroRestTime: number;
+  showReactionTest: boolean;
+  alerts: Alert[];
+
+  setLive: (v: { mfi: number | null; breakdown: MFIBreakdown; vision: VisionStats | null; acoustic: AcousticStats | null }) => void;
+  setIsTracking: (status: boolean) => void;
   setCameraEnabled: (status: boolean) => void;
+  setAudioMode: (mode: 'mic' | 'system') => void;
+  setCallAssistActive: (status: boolean) => void;
+
+  setCalibration: (c: CalibrationInfo | null) => void;
+  setCalibrationSkipped: (s: boolean) => void;
+
+  beginSession: () => void;
+  logDataPoint: (point: TelemetryDataPoint) => void;
   logGazePoint: (point: GazePoint) => void;
+  addReactionResult: (r: ReactionResult) => void;
+  setReactionBaseline: (ms: number | null) => void;
+
+  setSessionReportOpen: (status: boolean) => void;
+  triggerMicroRest: (reason: RestEvent['reason']) => void;
+  closeMicroRest: () => void;
+  setShowReactionTest: (status: boolean) => void;
 
   addAlert: (message: string, type: Alert['type']) => void;
   removeAlert: (id: string) => void;
-  logDataPoint: (point: TelemetryDataPoint) => void;
   resetSessionData: () => void;
 }
 
 export const useTelemetryStore = create<TelemetryState>((set, get) => ({
-  mfi: 0,
-  ear: 0.3,
-  perclos: 0,
-  lightingQuality: 1,
-  latency: 200,
-  isCalibrated: false,
-  outOfFrame: false,
-  
-  earBaseline: 0.30,
-  latencyBaseline: 200,
-  
-  fftData: null,
-  harshBandEnergy: 0,
+  mfi: null,
+  breakdown: null,
+  vision: null,
+  acoustic: null,
 
   isTracking: false,
-  isSessionReportOpen: false,
-  
-  isCallAssistActive: false,
-  showMicroRestModal: false,
-  lastMicroRestTime: 0,
-  showVoiceCheckIn: false,
-
-  calibrationAnchor: null,
-  sessionGazePoints: [],
-  audioMode: 'mic',
   cameraEnabled: true,
-  restBreakEvents: [],
+  audioMode: 'mic',
+  isCallAssistActive: false,
 
+  calibration: null,
+  calibrationSkipped: false,
+
+  sessionStart: null,
   sessionData: [],
+  sessionGazePoints: [],
+  restBreakEvents: [],
+  reactionResults: [],
+  reactionBaselineMs: loadReactionBaseline(),
+
+  isSessionReportOpen: false,
+  showMicroRestModal: false,
+  microRestReason: 'timer',
+  lastMicroRestTime: 0,
+  showReactionTest: false,
   alerts: [],
-  
-  setMFI: (val) => set({ mfi: Math.max(0, Math.min(100, val)) }),
-  setVisualMetrics: (ear, perclos, lightingQuality, latency, outOfFrame) => 
-    set({ ear, perclos, lightingQuality, latency, outOfFrame }),
-  setCalibrationStatus: (status) => set({ isCalibrated: status }),
-  setAcousticMetrics: (fftData, harshBandEnergy) => set({ fftData, harshBandEnergy }),
+
+  setLive: ({ mfi, breakdown, vision, acoustic }) =>
+    set({ mfi: mfi === null ? null : Math.max(0, Math.min(100, mfi)), breakdown, vision, acoustic }),
   setIsTracking: (status) => set({ isTracking: status }),
-  setSessionReportOpen: (status) => set({ isSessionReportOpen: status }),
-  
+  setCameraEnabled: (status) => set({ cameraEnabled: status }),
+  setAudioMode: (mode) => set({ audioMode: mode }),
   setCallAssistActive: (status) => set({ isCallAssistActive: status }),
-  
-  triggerMicroRest: () => {
-    const { lastMicroRestTime } = get();
-    const now = Date.now();
-    // 3-minute debounce (180,000 ms)
-    if (now - lastMicroRestTime > 180000) {
-      set((state) => ({ 
-        showMicroRestModal: true, 
-        lastMicroRestTime: now,
-        restBreakEvents: [...state.restBreakEvents, now]
-      }));
+
+  setCalibration: (c) => set({ calibration: c, calibrationSkipped: false }),
+  setCalibrationSkipped: (s) => set({ calibrationSkipped: s }),
+
+  beginSession: () => {
+    if (get().sessionStart === null) {
+      const now = Date.now();
+      set({ sessionStart: now, lastMicroRestTime: now });
     }
   },
-  closeMicroRest: () => set({ showMicroRestModal: false }),
-  setVoiceCheckIn: (status) => set({ showVoiceCheckIn: status }),
+  logDataPoint: (point) => set((s) => ({ sessionData: [...s.sessionData, point] })),
+  logGazePoint: (point) =>
+    set((s) => {
+      const pts = s.sessionGazePoints.length >= MAX_GAZE_POINTS ? s.sessionGazePoints.slice(1) : s.sessionGazePoints;
+      return { sessionGazePoints: [...pts, point] };
+    }),
+  addReactionResult: (r) => set((s) => ({ reactionResults: [...s.reactionResults, r] })),
+  setReactionBaseline: (ms) => {
+    saveReactionBaseline(ms);
+    set({ reactionBaselineMs: ms });
+  },
 
-  setCalibrationAnchor: (anchor) => set({ calibrationAnchor: anchor }),
-  setAudioMode: (mode) => set({ audioMode: mode }),
-  setCameraEnabled: (status) => set({ cameraEnabled: status }),
-  logGazePoint: (point) => set((state) => ({ sessionGazePoints: [...state.sessionGazePoints, point] })),
+  setSessionReportOpen: (status) => set({ isSessionReportOpen: status }),
 
-  addAlert: (message, type) => set((state) => {
-    if (state.alerts.some(a => a.message === message)) return state;
-    return {
-      alerts: [...state.alerts, { id: Math.random().toString(36).substr(2, 9), message, type, timestamp: Date.now() }]
-    };
-  }),
-  
-  removeAlert: (id) => set((state) => ({
-    alerts: state.alerts.filter((a) => a.id !== id)
-  })),
+  triggerMicroRest: (reason) => {
+    const { lastMicroRestTime, showMicroRestModal, showReactionTest } = get();
+    const now = Date.now();
+    if (showMicroRestModal || showReactionTest) return;
+    if (now - lastMicroRestTime < REST_DEBOUNCE_MS) return;
+    set((s) => ({
+      showMicroRestModal: true,
+      microRestReason: reason,
+      lastMicroRestTime: now,
+      restBreakEvents: [...s.restBreakEvents, { time: now, reason }],
+    }));
+  },
+  closeMicroRest: () => set({ showMicroRestModal: false, lastMicroRestTime: Date.now() }),
+  setShowReactionTest: (status) => set({ showReactionTest: status }),
 
-  logDataPoint: (point) => set((state) => ({
-    sessionData: [...state.sessionData, point]
-  })),
+  addAlert: (message, type) => {
+    if (get().alerts.some((a) => a.message === message)) return;
+    const id = Math.random().toString(36).slice(2, 11);
+    set((s) => ({ alerts: [...s.alerts, { id, message, type, timestamp: Date.now() }] }));
+    setTimeout(() => get().removeAlert(id), type === 'severe' ? 12000 : 8000);
+  },
+  removeAlert: (id) => set((s) => ({ alerts: s.alerts.filter((a) => a.id !== id) })),
 
-  resetSessionData: () => set({ sessionData: [], sessionGazePoints: [], mfi: 0 })
+  resetSessionData: () =>
+    set({
+      sessionData: [],
+      sessionGazePoints: [],
+      restBreakEvents: [],
+      reactionResults: [],
+      sessionStart: null,
+      mfi: null,
+      breakdown: null,
+    }),
 }));

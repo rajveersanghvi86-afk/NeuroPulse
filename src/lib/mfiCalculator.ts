@@ -1,64 +1,154 @@
-import { useTelemetryStore } from '../store/telemetryStore';
+import type { AcousticStats, MFIBreakdown, MFIComponent, VisionStats } from './types';
 
-export class MFICalculator {
-  private mfiHistory: number[] = [];
-  
-  public calculateMFI(
-    liveSaccadeLatency: number,
-    perclos: number, // rolling 60s
-    lightingQuality: number,
-    currentHarshEnergy: number,
-    liveEAR: number
-  ): number {
-    
-    // 1. EAR Fatigue Score (0 to 100)
-    // Baseline EAR is usually ~0.30. Drooping EAR is <= 0.15.
-    const earBaseline = (useTelemetryStore.getState() as any).earBaseline || 0.30;
-    const currentEAR = Math.max(0.01, liveEAR);
-    
-    // If currentEAR drops below baseline, score increases toward 100%
-    const earFatigueScore = Math.min(100, Math.max(0, ((earBaseline - currentEAR) / earBaseline) * 100));
-    
-    // 2. PERCLOS Score (0 to 100)
-    // If PERCLOS is 60%, perclosScore = 60.
-    // Ensure perclos is scaled correctly (0 to 1 -> 0 to 100) or if it's already 0-1.
-    // The spec says "If PERCLOS is 60%, perclosScore = 60". If perclos is passed as 0.6, we must multiply by 100.
-    const livePERCLOS = perclos > 1 ? perclos : perclos * 100;
-    const perclosScore = Math.min(100, Math.max(0, livePERCLOS));
-    
-    // 3. Saccadic Latency Score (0 to 100)
-    const latencyBaseline = (useTelemetryStore.getState() as any).latencyBaseline || 200; // ms
-    const latencyDelta = Math.max(0, liveSaccadeLatency - latencyBaseline);
-    const latencyFatigueScore = Math.min(100, (latencyDelta / 150) * 100); // 150ms delay = 100% fatigue
-    
-    // 4. Acoustic Load Score (0 to 100)
-    // Map currentHarshEnergy to 0-100. Assume max expected energy is 255.
-    const liveAcousticLoad = (currentHarshEnergy / 255.0) * 100;
-    const acousticScore = Math.min(100, Math.max(0, liveAcousticLoad));
-    
-    // --- FINAL WEIGHTED MFI (0 - 100%) ---
-    // Dynamically weighted based on camera confidence (C_light)
-    let w_visual = 0.70; // 70% weight on Eye/PERCLOS/Latency
-    let w_audio = 0.30;  // 30% weight on Audio
-    
-    const c_light = lightingQuality;
-    if (c_light < 0.5) {
-      w_visual = 0.20; // Fallback in dark rooms
-      w_audio = 0.80;
-    }
-    
-    const visualFatigueCombined = (earFatigueScore * 0.4) + (perclosScore * 0.4) + (latencyFatigueScore * 0.2);
-    const finalMFI = Math.round((visualFatigueCombined * w_visual) + (acousticScore * w_audio));
+/** One set of thresholds, used by the gauge, panel, rest breaks and report. */
+export const MFI_LEVELS = { elevated: 40, severe: 70 } as const;
 
-    // Rolling average smoothing (last 10 samples)
-    this.mfiHistory.push(finalMFI);
-    if (this.mfiHistory.length > 10) {
-      this.mfiHistory.shift();
-    }
-
-    const smoothedMFI = this.mfiHistory.reduce((a, b) => a + b, 0) / this.mfiHistory.length;
-    return smoothedMFI;
-  }
+export function mfiLevel(value: number | null): 'unknown' | 'nominal' | 'elevated' | 'severe' {
+  if (value === null) return 'unknown';
+  if (value >= MFI_LEVELS.severe) return 'severe';
+  if (value >= MFI_LEVELS.elevated) return 'elevated';
+  return 'nominal';
 }
 
-export const mfiEngine = new MFICalculator();
+/** Linear map of x from [from, to] onto 0-100, clamped. Works for decreasing ranges too. */
+export function scale(x: number, from: number, to: number): number {
+  const t = (x - from) / (to - from);
+  return Math.max(0, Math.min(1, t)) * 100;
+}
+
+/** Population default when the user has no personal reaction-time baseline yet (PVT median, rested adults). */
+export const DEFAULT_REACTION_BASELINE_MS = 270;
+/** A reaction test stops counting after this long. */
+export const REACTION_MAX_AGE_MS = 30 * 60 * 1000;
+
+export interface ReactionInput {
+  medianMs: number;
+  lapses: number;
+  ageMs: number;
+  baselineMs: number | null;
+}
+
+export interface MFIInputs {
+  vision: VisionStats | null;
+  acoustic: AcousticStats | null;
+  reaction: ReactionInput | null;
+}
+
+// Nominal weights (sum to 1). Each one is scaled down by how much we trust the signal right now,
+// and the result is re-normalised over what is available.
+const WEIGHTS = {
+  perclos: 0.3,
+  blinkDuration: 0.15,
+  eyelidDroop: 0.15,
+  longClosures: 0.1,
+  reaction: 0.15,
+  acoustic: 0.15,
+} as const;
+
+/**
+ * Multimodal Fatigue Index.
+ *
+ * Score ranges are based on commonly reported drowsiness markers:
+ * - PERCLOS (P80): ~4% when alert, 15%+ is generally treated as drowsy.
+ * - Blink duration: alert blinks are ~100-200 ms (a 30 fps webcam reads them a bit longer); 400 ms+ is a strong drowsiness sign.
+ * - Eyelid droop: the open-eye EAR falling 8-30% below the person's own baseline.
+ * - Long closures: closures of 0.5 s+ (microsleep-like events).
+ * - Reaction time (PVT): slowing of 20-120 ms over the personal baseline, plus lapses (>= 500 ms).
+ * - Acoustic: minutes-long exposure to loud, treble-heavy (2-4 kHz) audio relative to the room's own baseline.
+ */
+export function computeMFI({ vision, acoustic, reaction }: MFIInputs): MFIBreakdown {
+  const components: MFIComponent[] = [];
+
+  const visionConf = vision
+    ? Math.min(1, vision.coverage / 0.6) * (0.4 + 0.6 * vision.lightQuality)
+    : 0;
+  const visionReady = !!vision && vision.warmupDone && visionConf > 0.05;
+
+  components.push({
+    key: 'perclos',
+    label: 'Eye closure (PERCLOS)',
+    score: visionReady ? scale(vision!.perclos, 0.04, 0.2) : null,
+    weight: visionReady ? WEIGHTS.perclos * visionConf : 0,
+  });
+
+  const blinkReady = visionReady && vision!.medianBlinkMs !== null && vision!.blinkCount >= 3;
+  components.push({
+    key: 'blinkDuration',
+    label: 'Blink duration',
+    score: blinkReady ? scale(vision!.medianBlinkMs!, 200, 400) : null,
+    weight: blinkReady ? WEIGHTS.blinkDuration * visionConf : 0,
+  });
+
+  components.push({
+    key: 'eyelidDroop',
+    label: 'Eyelid droop',
+    score: visionReady ? scale(vision!.eyeOpenness, 0.92, 0.7) : null,
+    // A guessed baseline makes droop much less reliable.
+    weight: visionReady ? WEIGHTS.eyelidDroop * visionConf * (vision!.baselineSource === 'calibrated' ? 1 : 0.4) : 0,
+  });
+
+  components.push({
+    key: 'longClosures',
+    label: 'Long eye closures',
+    score: visionReady ? Math.min(100, vision!.longClosures * 40) : null,
+    weight: visionReady ? WEIGHTS.longClosures * visionConf : 0,
+  });
+
+  if (reaction && reaction.ageMs < REACTION_MAX_AGE_MS) {
+    const base = reaction.baselineMs ?? DEFAULT_REACTION_BASELINE_MS;
+    const slowing = reaction.medianMs - base;
+    const score = Math.min(100, scale(slowing, 20, 120) * 0.7 + Math.min(30, reaction.lapses * 10));
+    // Fades out as the result gets older; a guessed baseline counts for less.
+    const freshness = 1 - reaction.ageMs / REACTION_MAX_AGE_MS;
+    components.push({
+      key: 'reaction',
+      label: 'Reaction time',
+      score,
+      weight: WEIGHTS.reaction * freshness * (reaction.baselineMs ? 1 : 0.5),
+    });
+  } else {
+    components.push({ key: 'reaction', label: 'Reaction time', score: null, weight: 0 });
+  }
+
+  components.push({
+    key: 'acoustic',
+    label: 'Harsh audio exposure',
+    score: acoustic?.active ? acoustic.exposure : null,
+    weight: acoustic?.active ? WEIGHTS.acoustic : 0,
+  });
+
+  const totalWeight = components.reduce((a, c) => a + c.weight, 0);
+  const hasCore = components.some(c => c.weight > 0 && c.key !== 'acoustic') || (!vision && totalWeight > 0);
+  if (totalWeight <= 0 || !hasCore) {
+    return { raw: null, confidence: 0, components };
+  }
+
+  const raw = components.reduce((a, c) => a + (c.score ?? 0) * c.weight, 0) / totalWeight;
+  return { raw, confidence: Math.min(1, totalWeight), components };
+}
+
+/** Exponential smoothing with a time constant, so the dial doesn't jump on every blink. */
+export class MFISmoother {
+  private value: number | null = null;
+  private lastTime = 0;
+  private tauMs: number;
+  constructor(tauMs = 15000) {
+    this.tauMs = tauMs;
+  }
+
+  update(raw: number, now: number): number {
+    if (this.value === null) {
+      this.value = raw;
+    } else {
+      const dt = Math.max(0, now - this.lastTime);
+      const alpha = 1 - Math.exp(-dt / this.tauMs);
+      this.value += (raw - this.value) * alpha;
+    }
+    this.lastTime = now;
+    return this.value;
+  }
+
+  reset() {
+    this.value = null;
+  }
+}

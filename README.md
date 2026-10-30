@@ -1,91 +1,93 @@
 # NeuroPulse
 
-**A privacy-first desktop & web platform that measures, predicts, and actively mitigates Cognitive Fatigue and Acoustic Strain in digital workers.**
+**A privacy-first web app that estimates fatigue during long screen and video-call sessions, and helps you act on it.**
 
-![NeuroPulse Tech Stack](https://img.shields.io/badge/Stack-React_18_%7C_TypeScript_%7C_Vite-blue)
+![Stack](https://img.shields.io/badge/Stack-React_19_%7C_TypeScript_%7C_Vite-blue)
 ![Computer Vision](https://img.shields.io/badge/Vision-MediaPipe_FaceMesh-orange)
 ![Audio Processing](https://img.shields.io/badge/Audio-Web_Audio_API-green)
-![Privacy](https://img.shields.io/badge/Privacy-100%25_Local_Browser_RAM-brightgreen)
+![Privacy](https://img.shields.io/badge/Privacy-Runs_in_your_browser-brightgreen)
 
-Link: https://rajveersanghvi86-afk.github.io/NeuroPulse/
+Live: https://rajveersanghvi86-afk.github.io/NeuroPulse/
+
+> NeuroPulse is a wellbeing tool, not a medical device. Its numbers are estimates.
+
 ---
 
-## 🏗️ System Architecture
+## What it measures
 
-NeuroPulse combines two primary engines running asynchronously in the browser main-thread (optimized to prevent Web Worker serialization bottlenecks) to compute a real-time **Multimodal Fatigue Index (MFI)**.
+| Signal | How | Why it matters |
+|---|---|---|
+| **PERCLOS** | Share of time (60 s window, time-weighted) your eyes are ≥ ~80% closed, from the Eye Aspect Ratio of **both** eyes compared with **your own** open-eye baseline. | One of the best-validated drowsiness measures. Alert ≈ < 8%, drowsy ≈ 15%+. |
+| **Blink duration** | Blink start/end detected with hysteresis; median of normal blinks (< 0.5 s). | Blinks slow down with fatigue. |
+| **Eyelid droop** | Median open-eye EAR ÷ calibrated baseline. | Heavy lids are an early sign. |
+| **Long closures** | Closures ≥ 0.5 s in the last minute. | Microsleep-like events. |
+| **Reaction time** | A one-minute Psychomotor Vigilance Task (12 trials, 2–6 s random waits, lapses ≥ 500 ms). Compared with your personal baseline, which is saved locally. | Reaction-time slowing and lapses track sleepiness closely. |
+| **Harsh audio exposure** | Power in 2–4 kHz relative to the room's own quiet level, weighted by how much of the energy sits in that band, integrated over a few minutes. | Treble-heavy call audio is tiring. This is a comfort index, not an SPL/hearing-safety measure. |
 
-1. **SaccadeGaze Engine (Visual & Neurological Biometrics):**
-   - Utilizes `@mediapipe/face_mesh` and `@mediapipe/drawing_utils` loaded via CDN directly into memory.
-   - **Safety Guardrails**: Real-time alerts for Posture Slumping (IPD tracking), Head Drift ($>30^\circ$), and Low Lighting.
-   - Computes Eye Aspect Ratio (EAR) and PERCLOS over a 60-second rolling window.
-   - **9-Point Calibration**: Interactive spatial calibration utilizing Inverse Distance Weighting (IDW) with a $1.25\times$ boundary expansion factor.
-
-2. **Psychoacoustic Engine (Acoustic Stress & Signal Processing):**
-   - Taps into the Web Audio API (`AudioContext`, `AnalyserNode`).
-   - Runs a real-time FFT Spectral Analysis to monitor the harsh **2kHz–4kHz band**.
-   - Applies Low-Latency Perceptual Smoothing (via `BiquadFilterNode`) to notch out fatigue-inducing compression artifacts in VoIP streams (like Teams/Slack).
-
-## 🧮 Clinical & Mathematical Foundation
+Supporting measurements: **head pose in degrees** (from the 3D face mesh), **face lighting** (mean luminance of the face region), and **posture** relative to calibration (leaning in, head dropped). Frames with the head turned more than 25° or in very poor light are excluded from the eye metrics.
 
 ### Multimodal Fatigue Index (MFI)
-The unified adaptive state equation governs the fatigue dial:
-$$MFI(t) = w_1 \cdot \left(\frac{L_{\text{live}} - L_{\text{base}}}{L_{\text{base}}}\right) + w_2 \cdot (1 - \overline{EAR}_{60\text{s}}) + w_3 \cdot \int_{t-k}^{t} A(\tau) \, d\tau$$
 
-Where:
-- $L_{\text{live}}$ is the current saccadic latency.
-- $\overline{EAR}_{60\text{s}}$ represents the PERCLOS rolling average.
-- $A(\tau)$ is the acoustic energy in the 2kHz-4kHz band.
-- Weights $w_1, w_2, w_3$ dynamically adapt based on a calculated Lighting Quality Metric ($\mathcal{C}_{\text{light}}$).
+Each signal is mapped to a 0–100 score. The MFI is the weighted average of the available signals:
 
-### Spatial Calibration (IDW)
-Calibration leverages Inverse Distance Weighting to interpolate live gaze vectors:
-$$w_i(x) = \frac{1}{d(x, x_i)^p}$$
-$$u(x) = \frac{\sum_{i=1}^{N} w_i(x) u_i}{\sum_{i=1}^{N} w_i(x)}$$
+$$MFI = \frac{\sum_i w_i \, c_i \, s_i}{\sum_i w_i \, c_i}$$
 
----
+- Nominal weights $w$: PERCLOS 0.30, blink duration 0.15, eyelid droop 0.15, long closures 0.10, reaction time 0.15, audio 0.15.
+- $c_i$ is a confidence factor. It covers how much of the last minute had a usable face, lighting quality, whether the baseline was calibrated, and how old the last reaction test is (results fade out over 30 minutes).
+- The dial is smoothed with a 15 s exponential filter, and shows a **confidence** level plus a per-signal breakdown.
+- Levels used everywhere: **0–39 low, 40–69 elevated, 70+ high.**
 
-## 🔒 Privacy Statement
-**NeuroPulse operates 100% Client-Side.**
-All computer vision (FaceMesh), audio processing (FFT / Notch Filters), and post-session analytics occur exclusively in your browser's local RAM. **No video, audio, or biometric telemetry is ever transmitted to a remote server.** The application strictly relies on local WASM and Canvas API execution.
+### Calibration
 
----
+Nine dots. For each one you look, click and hold your gaze for one second. NeuroPulse then records:
+- your open-eye EAR baseline (middle-row targets), your pupil distance and head position (for posture), and your neutral head pose;
+- a **gaze model**: ridge-regularised linear regression from iris position inside the eye (both eyes) plus head yaw/pitch to screen coordinates. Its accuracy is reported honestly with leave-one-point-out cross-validation.
 
-## 🛠️ Local Installation & Setup Guide
+Without calibration, NeuroPulse estimates the baseline from recent frames (85th percentile of open-eye EAR). Eyelid-droop scores then count for less, and no gaze heatmap is recorded.
 
-### Prerequisites
-- Node.js (v18+)
-- npm (v9+)
+### Call Assist
 
-### Installation
+Use **System (Tab Capture)** and share a web call's tab with "Share tab audio". NeuroPulse mutes the tab's own playback (`suppressLocalAudioPlayback`) and plays the audio back through a 3 kHz peaking cut and a high-shelf cut, which get stronger as the MFI rises. The audio measurement then reflects what you actually hear. In microphone mode, Call Assist is unavailable (it would cause feedback).
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/rajveersanghvi86-afk/NeuroPulse.git
-   cd NeuroPulse
-   ```
+### Rest breaks
 
-2. **Install Dependencies:**
-   ```bash
-   npm install
-   ```
-
-3. **Start the Local Development Server:**
-   ```bash
-   npm run dev
-   ```
-
-4. **Access the Dashboard:**
-   Navigate to `http://localhost:5173` in your browser.
-   - Click **"Start Telemetry"**.
-   - Grant the required Camera and Microphone permissions.
-   - Follow the 9-point spatial calibration modal.
-   - Observe live HUD metrics over the vision overlay and real-time MFI updates.
-   - Click **"Finish Session"** to view the post-session Heatmap and export JSON/CSV/PDF reports.
+A 20-20-20 eye break is suggested every 20 minutes, or after the MFI has been elevated for 30 s, at most once every 5 minutes.
 
 ---
 
-## 🖥️ Active Workspace Mitigation UI
-When the MFI transitions into *Elevated* or *Severe* states, NeuroPulse simulates OS-level adaptations:
-- **Display Profile Shift**: Simulates OS contrast reduction and warmth shifts ($>60\%$).
-- **IDE Syntax Simplifier**: Toggles a mock syntax simplification ($>75\%$).
-- **Status Auto-Sync**: Simulates a Slack/Teams presence update to "Deep Work / Low Cognitive Bandwidth" ($>75\%$).
+## Known limitations
+
+- Webcam eye metrics are weaker with glasses, low or back lighting, and when you look down at a keyboard (lowered lids look like closure).
+- Webcam gaze is coarse. Typical error is 10–20% of the screen.
+- Browsers throttle background tabs, so keep NeuroPulse visible (e.g. in a side window) while tracking.
+- Desktop apps (native Zoom/Teams) can't be captured by a browser. Use microphone mode or the web versions.
+
+## Privacy
+
+Everything runs in your browser. Video, audio and measurements are never uploaded. The MediaPipe model files are downloaded from jsDelivr; nothing is sent back. The reaction-time baseline is stored in your browser's localStorage.
+
+---
+
+## Local setup
+
+Requires Node.js 18+.
+
+```bash
+git clone https://github.com/rajveersanghvi86-afk/NeuroPulse.git
+cd NeuroPulse
+npm install
+npm run dev
+```
+
+Open the URL Vite prints (it includes the `/NeuroPulse/` base path). Click **Start Tracking**, allow camera/microphone, and complete calibration. Take a reaction test while you feel fresh to set your baseline. Click **Finish Session** for the summary and PDF/CSV/JSON export.
+
+Pushing to `main` deploys to GitHub Pages via `.github/workflows/deploy.yml`.
+
+## Code map
+
+- `src/lib/visionEngine.ts`: FaceMesh loop, EAR/blinks/PERCLOS, head pose, lighting, posture, gaze logging
+- `src/lib/gazeModel.ts`: gaze regression and cross-validated error
+- `src/lib/acousticEngine.ts`: audio capture, band analysis, room baseline, Call Assist EQ
+- `src/lib/mfiCalculator.ts`: scoring, weights, thresholds, smoothing
+- `src/App.tsx`: the 10 Hz loop that combines everything, logs data and triggers breaks
+- `src/components/`: UI (calibration, reaction test, dashboard, report)
