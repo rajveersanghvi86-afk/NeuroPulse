@@ -213,8 +213,8 @@ export function buildReportPdf(stats: SessionStats, data: TelemetryDataPoint[], 
     stats.medianBlinkMs === null ? null : statusOf(stats.medianBlinkMs <= 200, stats.medianBlinkMs <= 300));
   addRow('Long closures (>= 0.5 s)', fmt(stats.totalLongClosures), '0-1',
     stats.totalLongClosures === null ? null : statusOf(stats.totalLongClosures <= 1, stats.totalLongClosures <= 4));
-  addRow('Eye openness vs baseline', fmt(stats.avgOpenness === null ? null : stats.avgOpenness * 100, 0, '%'), '90-110%',
-    stats.avgOpenness === null ? null : statusOf(stats.avgOpenness >= 0.9, stats.avgOpenness >= 0.78));
+  addRow('Eye openness vs your normal', fmt(stats.avgOpenness === null ? null : stats.avgOpenness * 100, 0, '%'), '90-100%',
+    stats.avgOpenness === null ? null : statusOf(stats.avgOpenness >= 0.9, stats.avgOpenness >= 0.75));
   addRow('Reaction time (last test)', r ? `${Math.round(r.medianMs)} ms (${r.lapses} lapses)` : 'not taken',
     `baseline ${Math.round(base ?? DEFAULT_REACTION_BASELINE_MS)} ms${base ? '' : ' (default)'}`,
     r ? statusOf(r.medianMs - (base ?? DEFAULT_REACTION_BASELINE_MS) <= 30 && r.lapses === 0, r.medianMs - (base ?? DEFAULT_REACTION_BASELINE_MS) <= 80 && r.lapses <= 1) : null);
@@ -314,7 +314,7 @@ export function buildReportPdf(stats: SessionStats, data: TelemetryDataPoint[], 
       [{ text: 'Looking below the screen (excluded)', bold: true }, { text: fmt(stats.lookingDownPct, 0, '% of measured time') }],
       [{ text: 'Lighting quality (avg)', bold: true }, { text: stats.avgLight === null ? '-' : `${(stats.avgLight * 100).toFixed(0)}%`, color: stats.avgLight !== null && stats.avgLight < 0.5 ? C.amber : C.ink }],
       [{ text: 'Face tracker speed (avg)', bold: true }, { text: fmt(stats.avgFps, 0, ' fps'), color: stats.avgFps !== null && stats.avgFps < 15 ? C.amber : C.ink }],
-      [{ text: 'Calibration', bold: true }, { text: stats.calibration ? `yes${stats.calibration.closedEar === null ? ' (closed-eye level estimated)' : ' (closed-eye level measured)'}` : 'no (baseline estimated)' }],
+      [{ text: 'Calibration', bold: true }, { text: stats.calibration ? `yes${stats.calibration.closedLid === null ? ' (closed-eye level estimated)' : ' (closed-eye level measured)'}` : 'no (baseline estimated)' }],
       [{ text: 'Average confidence of the index', bold: true }, { text: stats.avgConfidence === null ? '-' : `${(stats.avgConfidence * 100).toFixed(0)}%` }],
     ],
   );
