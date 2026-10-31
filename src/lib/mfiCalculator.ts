@@ -51,7 +51,7 @@ const WEIGHTS = {
  * Score ranges are based on commonly reported drowsiness markers:
  * - PERCLOS (P80): ~4% when alert, 15%+ is generally treated as drowsy.
  * - Blink duration (time the lids are more than half closed): alert ~80-150 ms; 350 ms+ is a strong drowsiness sign.
- * - Eyelid droop: the open-eye EAR falling 8-30% below the person's own baseline.
+ * - Eyelid droop: lids resting 10-40% of the way from the person's open level to their closed level.
  * - Long closures: closures of 0.5 s+ (microsleep-like events).
  * - Reaction time (PVT): slowing of 20-120 ms over the personal baseline, plus lapses (>= 500 ms).
  * - Acoustic: minutes-long exposure to loud, treble-heavy (2-4 kHz) audio relative to the room's own baseline.
@@ -82,7 +82,7 @@ export function computeMFI({ vision, acoustic, reaction }: MFIInputs): MFIBreakd
   components.push({
     key: 'eyelidDroop',
     label: 'Eyelid droop',
-    score: visionReady ? scale(vision!.eyeOpenness, 0.92, 0.7) : null,
+    score: visionReady ? scale(vision!.eyeOpenness, 0.9, 0.6) : null,
     // A guessed baseline makes droop much less reliable.
     weight: visionReady ? WEIGHTS.eyelidDroop * visionConf * (vision!.baselineSource === 'calibrated' ? 1 : 0.4) : 0,
   });

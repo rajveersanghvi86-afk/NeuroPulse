@@ -155,7 +155,7 @@ export const ReactionTestModal: React.FC = () => {
   const running = phase === 'waiting' || phase === 'stimulus' || phase === 'feedback';
 
   return (
-    <div className="fixed inset-0 z-[70] bg-slate-900/95 backdrop-blur-md flex flex-col items-center justify-center p-6 select-none">
+    <div className="fixed inset-0 z-[70] bg-slate-950 flex flex-col items-center justify-center p-6 select-none">
       <div className="relative w-full max-w-lg glass-panel p-8 flex flex-col items-center border border-white/10">
         <button onClick={close} className="absolute top-4 right-4 text-slate-400 hover:text-white" aria-label="Close">
           <X className="w-6 h-6" />

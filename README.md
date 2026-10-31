@@ -3,7 +3,7 @@
 **A privacy-first web app that estimates fatigue during long screen and video-call sessions, and helps you act on it.**
 
 ![Stack](https://img.shields.io/badge/Stack-React_19_%7C_TypeScript_%7C_Vite-blue)
-![Computer Vision](https://img.shields.io/badge/Vision-MediaPipe_FaceMesh-orange)
+![Computer Vision](https://img.shields.io/badge/Vision-MediaPipe_Face_Landmarker-orange)
 ![Audio Processing](https://img.shields.io/badge/Audio-Web_Audio_API-green)
 ![Privacy](https://img.shields.io/badge/Privacy-Runs_in_your_browser-brightgreen)
 
@@ -17,7 +17,7 @@ Live: https://rajveersanghvi86-afk.github.io/NeuroPulse/
 
 | Signal | How | Why it matters |
 |---|---|---|
-| **PERCLOS** | Share of time (60 s window, time-weighted) your eyes are ≥ 80% closed. Closure is measured on **your own** range, from your open-eye level to your closed-eye level, both taken in calibration, using the Eye Aspect Ratio of **both** eyes (3 lid distances each). The "open" level is adjusted for where you look (lids drop when you look down), time spent looking well below the screen is excluded, and a 3-frame median rejects single noisy frames. | One of the best-validated drowsiness measures. Alert ≈ < 8%, drowsy ≈ 15%+. |
+| **PERCLOS** | Share of time (60 s window, time-weighted) your eyes are ≥ 80% closed. Eye closure comes from the face model's trained **eye-blink score** (both eyes), mapped onto **your own** range, from your open level to your closed level, both taken in calibration. The "open" level is adjusted for where you look (using the model's eyes-looking-down score), time spent looking well below the screen is excluded, and a 3-frame median rejects single noisy frames. | One of the best-validated drowsiness measures. Alert ≈ < 8%, drowsy ≈ 15%+. |
 | **Blink duration** | A blink is counted when the lids pass 50% closure and ends below 30% (hysteresis). Duration = time past half-closure; median of normal blinks (< 0.5 s). | Blinks slow down with fatigue. |
 | **Eyelid droop** | Median open-eye EAR ÷ calibrated baseline. | Heavy lids are an early sign. |
 | **Long closures** | Closures ≥ 0.5 s in the last minute. | Microsleep-like events. |
@@ -78,6 +78,10 @@ CSV (one row per second, including every signal score) and JSON exports are also
 Everything runs in your browser. Video, audio and measurements are never uploaded. The MediaPipe model files are downloaded from jsDelivr; nothing is sent back. The reaction-time baseline is stored in your browser's localStorage.
 
 ---
+
+## Face tracking
+
+NeuroPulse uses MediaPipe **Face Landmarker** (Tasks API) on the **GPU** when available, with a CPU fallback. Each camera frame is processed once (`requestVideoFrameCallback`). On slow CPU-only machines the tracker is capped at about 75% of main-thread time so the page stays responsive. The WASM runtime and the model are served from this site rather than a CDN: `scripts/copy-mediapipe.mjs` copies the runtime from `node_modules` before `dev`/`build`, and the model is in `public/models/`.
 
 ## Local setup
 

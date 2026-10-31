@@ -1,15 +1,17 @@
-import type { NormalizedLandmark, NormalizedLandmarkList, Options, Results } from '@mediapipe/face_mesh';
+import { DrawingUtils, FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
+import type { NormalizedLandmark } from '@mediapipe/tasks-vision';
 import { useTelemetryStore } from '../store/telemetryStore';
 import type { VisionStats } from './types';
 import type { GazeFeatures, GazeModel } from './gazeModel';
 import { predictGaze } from './gazeModel';
 
-export const FACE_MESH_VERSION = '0.4.1633559619';
+// The tracker's WASM and model are served from this site (copied in at build time), not a CDN.
+const ASSET_BASE = import.meta.env.BASE_URL;
+const WASM_PATH = `${ASSET_BASE}mediapipe/wasm`;
+const MODEL_PATH = `${ASSET_BASE}models/face_landmarker.task`;
 
-// MediaPipe FaceMesh landmark indices (refineLandmarks: true adds 468-477 for the irises).
+// Face Landmarker landmark indices (same 478-point topology as FaceMesh, 468-477 are the irises).
 // "Right"/"left" are the subject's own eyes.
-const RIGHT_EYE_EAR = [33, 160, 158, 133, 153, 144, 159, 145]; // p1..p6, then lid centres (top, bottom)
-const LEFT_EYE_EAR = [362, 385, 387, 263, 373, 380, 386, 374];
 const RIGHT_EYE_CORNERS = [33, 133]; // both pairs go left -> right in the image
 const LEFT_EYE_CORNERS = [362, 263];
 const RIGHT_IRIS = 468;
@@ -21,29 +23,35 @@ const FACE_LEFT = 234;
 const FACE_RIGHT = 454;
 
 const WINDOW_MS = 60000;
-const DEFAULT_EAR_BASELINE = 0.28;
 
-// Eye closure is measured on the person's own range: 0 = their open-eye level, 1 = their closed-eye level.
-// MediaPipe's eyelids rarely reach a "fully closed" shape, so a fixed EAR threshold misses many blinks.
+/*
+ * Eye closure comes from the model's trained "eyeBlink" blendshape score (0 = open, ~1 = shut),
+ * averaged over both eyes. It is much steadier than measuring lid shape from landmarks.
+ * We then map it onto each person's own range: 0 = their open level, 1 = their closed level.
+ */
+const DEFAULT_OPEN_LID = 0.08;
+const DEFAULT_CLOSED_LID = 0.65;
 const BLINK_START_CLOSURE = 0.5; // lids at least half way down
 const BLINK_END_CLOSURE = 0.3; // hysteresis so noise doesn't split one blink into two
 const PERCLOS_CLOSURE = 0.8; // PERCLOS P80: at least 80% closed
-/** Closed-eye EAR as a fraction of open, used until the eyes-closed calibration step is done. */
-const DEFAULT_CLOSED_FRACTION = 0.4;
 const LONG_CLOSURE_MS = 500;
-const MAX_HEAD_DEVIATION_DEG = 25; // beyond this the eye shape is too distorted to trust
+const MAX_HEAD_DEVIATION_DEG = 25; // beyond this the eye readings are too distorted to trust
+const LIGHT_CHECK_MS = 1000;
+
+export type TrackerStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 export interface VisionCalibration {
-  earBaseline: number;
-  /** Median EAR with the eyes gently closed, or null if that step was skipped. */
-  closedEar: number | null;
+  /** Blink score with eyes normally open (looking at the middle of the screen). */
+  openLid: number;
+  /** Blink score with eyes gently closed, or null if that step was skipped. */
+  closedLid: number | null;
   /**
-   * How open-eye EAR changes with vertical gaze (lids drop when you look down).
-   * expectedOpen = earBaseline + earGazeSlope * (v - gazeV.middle)
+   * Lids drop when you look down, which raises the blink score a little.
+   * expectedOpen = openLid + lidLookSlope * (lookDown - lookDown.middle)
    */
-  earGazeSlope: number;
-  /** Vertical iris position measured at the top, middle and bottom rows of calibration. */
-  gazeV: { top: number; middle: number; bottom: number } | null;
+  lidLookSlope: number;
+  /** "Eyes looking down" score at the top, middle and bottom calibration rows. */
+  lookDown: { top: number; middle: number; bottom: number } | null;
   ipdBaseline: number;
   anchor: { x: number; y: number };
   neutralYaw: number;
@@ -55,7 +63,10 @@ export interface VisionCalibration {
 export interface FrameSample {
   time: number;
   faceFound: boolean;
-  ear: number;
+  /** Raw blink score, both eyes averaged (0 open .. ~1 closed). */
+  lid: number;
+  /** "Looking down" score, both eyes averaged. */
+  lookDown: number;
   /** 0 = eyes at their normal open level, 1 = at their closed level. */
   closure: number;
   yaw: number;
@@ -74,9 +85,8 @@ interface FrameRecord {
   valid: boolean;
   closed: boolean;
   inBlink: boolean;
-  ear: number;
-  /** EAR relative to the expected open level for this frame (1 = normally open). */
-  rel: number;
+  lid: number;
+  closure: number;
 }
 
 type Pt = { x: number; y: number; z: number };
@@ -97,14 +107,46 @@ function percentile(xs: number[], p: number): number {
   return s[Math.min(s.length - 1, Math.max(0, Math.round(p * (s.length - 1))))];
 }
 
+let landmarkerPromise: Promise<FaceLandmarker> | null = null;
+
+let delegateUsed: 'GPU' | 'CPU' | null = null;
+
+async function createLandmarker(): Promise<FaceLandmarker> {
+  const fileset = await FilesetResolver.forVisionTasks(WASM_PATH);
+  const options = (delegate: 'GPU' | 'CPU') => ({
+    baseOptions: { modelAssetPath: MODEL_PATH, delegate },
+    runningMode: 'VIDEO' as const,
+    numFaces: 1,
+    outputFaceBlendshapes: true,
+    minFaceDetectionConfidence: 0.5,
+    minFacePresenceConfidence: 0.5,
+    minTrackingConfidence: 0.5,
+  });
+  try {
+    // GPU is several times faster and keeps the page responsive.
+    const lm = await FaceLandmarker.createFromOptions(fileset, options('GPU'));
+    delegateUsed = 'GPU';
+    return lm;
+  } catch (e) {
+    console.warn('GPU face tracking unavailable, falling back to CPU', e);
+    const lm = await FaceLandmarker.createFromOptions(fileset, options('CPU'));
+    delegateUsed = 'CPU';
+    return lm;
+  }
+}
+
 export class VisionEngine {
-  private faceMesh: any = null;
+  private landmarker: FaceLandmarker | null = null;
+  private status: TrackerStatus = 'idle';
   private video: HTMLVideoElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
+  private drawer: DrawingUtils | null = null;
   private running = false;
-  private busy = false;
-  private rafId = 0;
+  private runId = 0;
   private lastVideoTime = -1;
+  private lastTimestamp = 0;
+  /** Earliest time the next frame may be processed (keeps the tracker from hogging the page). */
+  private nextAllowed = 0;
 
   private calibration: VisionCalibration | null = null;
   private latest: FrameSample | null = null;
@@ -115,16 +157,15 @@ export class VisionEngine {
   private blinkTotal = 0;
   private longClosureTotal = 0;
   private recentClosure: number[] = [];
-  private vSmooth: number | null = null;
+  private lookSmooth: number | null = null;
   /** Slow average of closure between blinks (0 = eyes at their usual open level). */
   private restClosure = 0;
   private lookingDown = false;
   private lastBlinkMs: number | null = null;
   private lastFrameT = 0;
   private startedAt = 0;
-  private smoothedEar = DEFAULT_EAR_BASELINE;
 
-  private adaptiveBaseline: number | null = null;
+  private adaptiveOpen: number | null = null;
   private lastBaselineUpdate = 0;
 
   private lightCanvas: HTMLCanvasElement | null = null;
@@ -137,51 +178,49 @@ export class VisionEngine {
 
   // ---------- lifecycle ----------
 
-  private initFaceMesh() {
-    if (this.faceMesh) return;
-    const FaceMesh = (window as any).FaceMesh;
-    if (!FaceMesh) throw new Error('MediaPipe FaceMesh failed to load');
-    this.faceMesh = new FaceMesh({
-      locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@${FACE_MESH_VERSION}/${file}`,
-    });
-    const options: Options = {
-      maxNumFaces: 1,
-      refineLandmarks: true,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5,
-    };
-    this.faceMesh.setOptions(options);
-    this.faceMesh.onResults((r: Results) => this.handleResults(r));
+  getStatus(): TrackerStatus {
+    return this.status;
   }
 
-  start(video: HTMLVideoElement, canvas: HTMLCanvasElement) {
-    this.initFaceMesh();
+  async start(video: HTMLVideoElement, canvas: HTMLCanvasElement) {
+    const run = ++this.runId;
     this.video = video;
     this.ctx = canvas.getContext('2d');
+    this.drawer = this.ctx ? new DrawingUtils(this.ctx) : null;
     this.resetWindows();
     this.running = true;
 
-    const loop = () => {
-      if (!this.running) return;
-      const v = this.video;
-      if (v && v.readyState >= 2 && v.currentTime !== this.lastVideoTime && !this.busy) {
-        this.lastVideoTime = v.currentTime;
-        this.busy = true;
-        this.faceMesh
-          .send({ image: v })
-          .catch((e: unknown) => console.error('FaceMesh error:', e))
-          .finally(() => {
-            this.busy = false;
-          });
+    if (!this.landmarker) {
+      this.status = 'loading';
+      landmarkerPromise ??= createLandmarker();
+      try {
+        this.landmarker = await landmarkerPromise;
+      } catch (e) {
+        landmarkerPromise = null;
+        this.status = 'error';
+        throw e;
       }
-      this.rafId = requestAnimationFrame(loop);
+    }
+    this.status = 'ready';
+    if (run !== this.runId || !this.running) return;
+
+    const v = video as HTMLVideoElement & { requestVideoFrameCallback?: (cb: () => void) => number };
+    // Process each new camera frame once; requestVideoFrameCallback fires exactly when one arrives.
+    const schedule = () => {
+      if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(step);
+      else requestAnimationFrame(step);
     };
-    this.rafId = requestAnimationFrame(loop);
+    const step = () => {
+      if (!this.running || run !== this.runId) return;
+      this.processFrame();
+      schedule();
+    };
+    schedule();
   }
 
   stop() {
     this.running = false;
-    cancelAnimationFrame(this.rafId);
+    this.runId++;
     if (this.ctx) this.ctx.clearRect(0, 0, this.ctx.canvas.width, this.ctx.canvas.height);
     this.video = null;
     this.latest = null;
@@ -194,10 +233,10 @@ export class VisionEngine {
     this.blinkStart = null;
     this.lastFrameT = 0;
     this.startedAt = performance.now();
-    this.adaptiveBaseline = null;
+    this.adaptiveOpen = null;
     this.since = {};
     this.recentClosure = [];
-    this.vSmooth = null;
+    this.lookSmooth = null;
     this.lookingDown = false;
     this.restClosure = 0;
   }
@@ -208,6 +247,7 @@ export class VisionEngine {
     this.frames = [];
     this.blinks = [];
     this.blinkStart = null;
+    this.restClosure = 0;
     this.startedAt = performance.now();
   }
 
@@ -215,39 +255,61 @@ export class VisionEngine {
     return this.latest;
   }
 
-  /** EAR treated as "fully closed" for this person. */
-  closedLevel(open: number): number {
-    const c = this.calibration?.closedEar;
-    return c != null && c < open * 0.85 ? c : open * DEFAULT_CLOSED_FRACTION;
+  private openLevel(): { value: number; source: VisionStats['baselineSource'] } {
+    if (this.calibration) return { value: this.calibration.openLid, source: 'calibrated' };
+    if (this.adaptiveOpen !== null) return { value: this.adaptiveOpen, source: 'adaptive' };
+    return { value: DEFAULT_OPEN_LID, source: 'default' };
   }
 
-  currentBaseline(): { value: number; source: VisionStats['baselineSource'] } {
-    if (this.calibration) return { value: this.calibration.earBaseline, source: 'calibrated' };
-    if (this.adaptiveBaseline) return { value: this.adaptiveBaseline, source: 'adaptive' };
-    return { value: DEFAULT_EAR_BASELINE, source: 'default' };
+  private closedLevel(open: number): number {
+    const c = this.calibration?.closedLid;
+    if (c != null && c > open + 0.15) return c;
+    return Math.max(DEFAULT_CLOSED_LID, open + 0.35);
   }
 
   // ---------- per-frame measurement ----------
 
-  private handleResults(results: Results) {
-    if (!this.running) return;
+  private processFrame() {
+    const video = this.video;
+    const lm = this.landmarker;
+    if (!video || !lm || video.readyState < 2 || video.currentTime === this.lastVideoTime) return;
+    const now = performance.now();
+    if (now < this.nextAllowed) return;
+    this.lastVideoTime = video.currentTime;
+    const ts = Math.max(this.lastTimestamp + 1, now);
+    this.lastTimestamp = ts;
+    let result;
+    try {
+      result = lm.detectForVideo(video, ts);
+    } catch (e) {
+      console.error('Face tracking error:', e);
+      return;
+    }
+    // On slow (CPU-only) machines, leave at least a quarter of the time for the rest of the page.
+    const cost = performance.now() - now;
+    this.nextAllowed = performance.now() + cost / 3;
+    const shapes: Record<string, number> = {};
+    for (const c of result.faceBlendshapes?.[0]?.categories ?? []) shapes[c.categoryName] = c.score;
+    this.handleFrame(result.faceLandmarks?.[0] ?? null, shapes);
+  }
+
+  private handleFrame(lms: NormalizedLandmark[] | null, shapes: Record<string, number>) {
     const t = performance.now();
     const dt = this.lastFrameT ? Math.min(100, t - this.lastFrameT) : 33;
     this.lastFrameT = t;
 
     const W = this.video?.videoWidth || 640;
     const H = this.video?.videoHeight || 480;
-    const lms = results.multiFaceLandmarks?.[0];
 
     this.pruneWindows(t);
 
     if (!lms || lms.length < 478) {
       this.latest = {
-        time: t, faceFound: false, ear: 0, closure: 0, yaw: 0, pitch: 0, roll: 0, ipd: 0,
+        time: t, faceFound: false, lid: 0, lookDown: 0, closure: 0, yaw: 0, pitch: 0, roll: 0, ipd: 0,
         nose: { x: 0.5, y: 0.5 }, gaze: null, valid: false, eyesClosed: false,
       };
       this.endBlink(t, false);
-      this.frames.push({ t, dt, valid: false, closed: false, inBlink: false, ear: 0, rel: 1 });
+      this.frames.push({ t, dt, valid: false, closed: false, inBlink: false, lid: 0, closure: 0 });
       this.sustained('noFace', true, t, 2000, () =>
         this.alert('noFace', 'Face not visible: eye tracking paused.', 'severe', 30000));
       this.measureLight(t, null, W, H);
@@ -259,14 +321,8 @@ export class VisionEngine {
     // Pixel-space points (z uses the same scale as x in MediaPipe's output).
     const P = (i: number): Pt => ({ x: lms[i].x * W, y: lms[i].y * H, z: lms[i].z * W });
 
-    // Eye Aspect Ratio, both eyes, in pixel space so the 4:3 frame doesn't skew it.
-    // Three vertical lid distances (including the lid centres, which move the most in a blink).
-    const earOf = (idx: number[]) => {
-      const [p1, p2, p3, p4, p5, p6, top, bottom] = idx.map(P);
-      const w = dist2(p1, p4);
-      return w > 0 ? (dist2(p2, p6) + dist2(p3, p5) + dist2(top, bottom)) / (3 * w) : 0;
-    };
-    const ear = (earOf(RIGHT_EYE_EAR) + earOf(LEFT_EYE_EAR)) / 2;
+    const lid = ((shapes.eyeBlinkLeft ?? 0) + (shapes.eyeBlinkRight ?? 0)) / 2;
+    const lookDown = ((shapes.eyeLookDownLeft ?? 0) + (shapes.eyeLookDownRight ?? 0)) / 2;
 
     // Head pose in degrees from the face's own axes.
     const fl = P(FACE_LEFT), fr = P(FACE_RIGHT);
@@ -299,37 +355,34 @@ export class VisionEngine {
     const pitchDev = pitch - (cal?.neutralPitch ?? 0);
     const pitchLimit = cal ? MAX_HEAD_DEVIATION_DEG : 35; // without calibration we don't know the neutral pitch
     const headOk = Math.abs(yawDev) < MAX_HEAD_DEVIATION_DEG && Math.abs(pitchDev) < pitchLimit;
-    this.updateAdaptiveBaseline(t);
-    const baseline = this.currentBaseline().value;
-    const closedEar = this.closedLevel(baseline);
 
-    // Your lids sit lower when you look down, so the "normal open" level follows vertical gaze.
-    // Gaze is only updated while the eyes are open, since iris landmarks are unreliable mid-blink.
-    const gv = cal?.gazeV;
-    const expectedFor = (v: number | null) => {
-      if (!cal || !gv || v === null) return baseline;
-      let e = baseline + cal.earGazeSlope * (v - gv.middle);
-      e = Math.max(baseline * 0.7, Math.min(baseline * 1.25, e));
-      return Math.max(e, closedEar + 0.3 * (baseline - closedEar));
+    this.updateAdaptiveOpen(t);
+    const open = this.openLevel().value;
+    const closedLid = this.closedLevel(open);
+
+    // Looking down lowers the lids a little; follow that so it isn't read as tiredness.
+    // The look-down score is only updated while the eye isn't mid-blink (it's unreliable then).
+    const ld = cal?.lookDown;
+    const expectedFor = (look: number | null) => {
+      if (!cal || !ld || look === null) return open;
+      const e = open + cal.lidLookSlope * (look - ld.middle);
+      return Math.min(closedLid - 0.25 * (closedLid - open), Math.max(open - 0.05, Math.min(open + 0.35, e)));
     };
-    const closureFor = (open: number) => Math.max(0, Math.min(1.2, (open - ear) / Math.max(1e-3, open - closedEar)));
-    // Use this frame's gaze unless the eye looks mid-blink, where iris landmarks are unreliable:
-    // then keep the gaze from just before the blink.
-    let expectedOpen = expectedFor(gaze.v);
+    const closureFor = (o: number) => Math.max(0, Math.min(1.2, (lid - o) / Math.max(1e-3, closedLid - o)));
+    let expectedOpen = expectedFor(lookDown);
     let closure = closureFor(expectedOpen);
     if (closure < 0.6) {
-      this.vSmooth = this.vSmooth === null ? gaze.v : this.vSmooth + (gaze.v - this.vSmooth) * 0.5;
+      this.lookSmooth = this.lookSmooth === null ? lookDown : this.lookSmooth + (lookDown - this.lookSmooth) * 0.5;
     } else {
-      expectedOpen = expectedFor(this.vSmooth);
+      expectedOpen = expectedFor(this.lookSmooth);
       closure = closureFor(expectedOpen);
     }
 
     // Looking well below the screen (keyboard, phone): lids drop for reasons other than tiredness.
-    if (gv && this.vSmooth !== null && gv.bottom > gv.top) {
-      this.lookingDown = this.vSmooth - gv.bottom > 0.6 * (gv.bottom - gv.top);
-    } else {
-      this.lookingDown = false;
-    }
+    const look = this.lookSmooth ?? lookDown;
+    this.lookingDown = ld && ld.bottom > ld.top
+      ? look - ld.bottom > Math.max(0.12, 0.6 * (ld.bottom - ld.top))
+      : look > 0.55;
     const valid = headOk && this.lightLevel >= 25 && !this.lookingDown;
 
     // Blink state machine. Thresholds sit above the current resting level, so drooping eyes
@@ -349,6 +402,7 @@ export class VisionEngine {
     } else {
       this.endBlink(t, false);
     }
+
     // PERCLOS uses a 3-frame median so a single noisy frame can't count as "closed".
     this.recentClosure.push(closure);
     if (this.recentClosure.length > 3) this.recentClosure.shift();
@@ -358,11 +412,10 @@ export class VisionEngine {
     const inEarlierBlink = this.blinkStart !== null && this.blinkStart < t;
     const closed = valid && closure >= PERCLOS_CLOSURE && (closureFiltered >= PERCLOS_CLOSURE || inEarlierBlink);
 
-    this.frames.push({ t, dt, valid, closed, inBlink: this.blinkStart !== null, ear, rel: ear / expectedOpen });
-    if (valid && this.blinkStart === null) this.smoothedEar += (ear - this.smoothedEar) * 0.3;
+    this.frames.push({ t, dt, valid, closed, inBlink: this.blinkStart !== null, lid, closure });
 
     this.latest = {
-      time: t, faceFound: true, ear, closure, yaw, pitch, roll, ipd, nose, gaze, valid,
+      time: t, faceFound: true, lid, lookDown, closure, yaw, pitch, roll, ipd, nose, gaze, valid,
       eyesClosed: this.blinkStart !== null,
     };
 
@@ -413,28 +466,30 @@ export class VisionEngine {
     while (this.blinks.length && t - this.blinks[0].t > WINDOW_MS) this.blinks.shift();
   }
 
-  /** Without calibration, estimate the open-eye EAR as a high percentile of recent valid frames. */
-  private updateAdaptiveBaseline(t: number) {
-    if (this.calibration || t - this.lastBaselineUpdate < 1000) return;
+  /** Without calibration, estimate the open-eye blink score from recent frames (a low percentile). */
+  private updateAdaptiveOpen(t: number) {
+    if (this.calibration || t - this.lastBaselineUpdate < 500) return;
     this.lastBaselineUpdate = t;
-    const ears = this.frames.filter(f => f.valid && !f.inBlink).map(f => f.ear);
-    if (ears.length >= 300) this.adaptiveBaseline = percentile(ears, 0.85);
+    const lids = this.frames.filter(f => f.valid && !f.inBlink).map(f => f.lid);
+    // A couple of seconds of open-eye frames is enough for a first estimate; it keeps refining.
+    if (lids.length >= 30) this.adaptiveOpen = Math.min(0.4, percentile(lids, 0.3));
   }
 
-  private measureLight(t: number, lms: NormalizedLandmarkList | null, W: number, H: number) {
-    if (!this.video || t - this.lastLightCheck < 500) return;
+  /** Mean brightness of the face area, sampled once a second at 16x16 (cheap). */
+  private measureLight(t: number, lms: NormalizedLandmark[] | null, W: number, H: number) {
+    if (!this.video || t - this.lastLightCheck < LIGHT_CHECK_MS) return;
     this.lastLightCheck = t;
     if (!this.lightCanvas) {
       this.lightCanvas = document.createElement('canvas');
-      this.lightCanvas.width = 32;
-      this.lightCanvas.height = 32;
+      this.lightCanvas.width = 16;
+      this.lightCanvas.height = 16;
     }
     const c = this.lightCanvas.getContext('2d', { willReadFrequently: true });
     if (!c) return;
     let sx = 0, sy = 0, sw = W, sh = H;
     if (lms) {
       let minX = 1, minY = 1, maxX = 0, maxY = 0;
-      for (const p of lms as NormalizedLandmark[]) {
+      for (const p of lms) {
         if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
         if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
       }
@@ -443,8 +498,8 @@ export class VisionEngine {
       sh = Math.max(8, Math.min(H - sy, (maxY - minY) * H));
     }
     try {
-      c.drawImage(this.video, sx, sy, sw, sh, 0, 0, 32, 32);
-      const d = c.getImageData(0, 0, 32, 32).data;
+      c.drawImage(this.video, sx, sy, sw, sh, 0, 0, 16, 16);
+      const d = c.getImageData(0, 0, 16, 16).data;
       let sum = 0;
       for (let i = 0; i < d.length; i += 4) sum += 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
       this.lightLevel = sum / (d.length / 4);
@@ -477,18 +532,24 @@ export class VisionEngine {
   getStats(): VisionStats {
     const t = performance.now();
     this.pruneWindows(t);
-    const valid = this.frames.filter(f => f.valid);
-    const validMs = valid.reduce((a, f) => a + f.dt, 0);
-    const closedMs = valid.filter(f => f.closed).reduce((a, f) => a + f.dt, 0);
+    let validMs = 0, closedMs = 0, recentFrames = 0;
+    const openClosures: number[] = [];
+    for (const f of this.frames) {
+      if (t - f.t <= 2000) recentFrames++;
+      if (!f.valid) continue;
+      validMs += f.dt;
+      if (f.closed) closedMs += f.dt;
+      if (!f.inBlink && !f.closed) openClosures.push(f.closure);
+    }
     const windowMs = Math.max(1000, Math.min(WINDOW_MS, t - this.startedAt));
 
     const normal = this.blinks.filter(b => b.dur < LONG_CLOSURE_MS);
     const long = this.blinks.filter(b => b.dur >= LONG_CLOSURE_MS);
     const validMin = validMs / 60000;
 
-    const { value: baseline, source } = this.currentBaseline();
-    const openRel = valid.filter(f => !f.inBlink && !f.closed).map(f => f.rel);
-    const openness = openRel.length >= 30 ? median(openRel) : 1;
+    const { value: open, source } = this.openLevel();
+    // 1 = lids at their usual open position; 0.7 = resting 30% of the way to closed.
+    const openness = openClosures.length >= 30 ? 1 - median(openClosures) : 1;
 
     const latest = this.latest;
     const faceVisible = !!latest && latest.faceFound && t - latest.time < 1000;
@@ -496,16 +557,18 @@ export class VisionEngine {
 
     return {
       faceVisible,
-      ear: this.smoothedEar,
+      trackerStatus: this.status,
+      trackerDelegate: delegateUsed,
+      lid: faceVisible ? latest!.lid : 0,
       closure: faceVisible ? latest!.closure : 0,
       eyesClosedNow: faceVisible && this.blinkStart !== null,
       totalBlinks: this.blinkTotal,
       totalLongClosures: this.longClosureTotal,
       lookingDown: this.lookingDown,
       lastBlinkMs: this.lastBlinkMs,
-      closedCalibrated: this.calibration?.closedEar != null,
-      fps: this.frames.filter(f => t - f.t <= 2000).length / 2,
-      earBaseline: baseline,
+      closedCalibrated: this.calibration?.closedLid != null,
+      fps: recentFrames / 2,
+      openLid: open,
       baselineSource: source,
       perclos: validMs > 0 ? closedMs / validMs : 0,
       blinkRate: validMin > 0.15 ? normal.length / validMin : 0,
@@ -526,22 +589,19 @@ export class VisionEngine {
 
   // ---------- overlay ----------
 
-  private draw(lms: NormalizedLandmarkList | null, nose?: { x: number; y: number }) {
+  private draw(lms: NormalizedLandmark[] | null, nose?: { x: number; y: number }) {
     const ctx = this.ctx;
     if (!ctx) return;
     const w = ctx.canvas.width, h = ctx.canvas.height;
     ctx.clearRect(0, 0, w, h);
-    if (!lms) return;
-    const win = window as any;
-    if (win.drawConnectors) {
-      const eyeColor = this.blinkStart !== null ? '#F59E0B' : '#14B8A6';
-      // Outline only: the full 2,500-edge tessellation is costly to draw every frame.
-      win.drawConnectors(ctx, lms, win.FACEMESH_FACE_OVAL, { color: '#C0C0C060', lineWidth: 1 });
-      win.drawConnectors(ctx, lms, win.FACEMESH_RIGHT_EYE, { color: eyeColor, lineWidth: 1 });
-      win.drawConnectors(ctx, lms, win.FACEMESH_LEFT_EYE, { color: eyeColor, lineWidth: 1 });
-      win.drawConnectors(ctx, lms, win.FACEMESH_RIGHT_IRIS, { color: '#14B8A6', lineWidth: 1 });
-      win.drawConnectors(ctx, lms, win.FACEMESH_LEFT_IRIS, { color: '#14B8A6', lineWidth: 1 });
-    }
+    if (!lms || !this.drawer) return;
+    const eyeColor = this.blinkStart !== null ? '#F59E0B' : '#14B8A6';
+    // Outline only: the full tessellation is costly to draw every frame.
+    this.drawer.drawConnectors(lms, FaceLandmarker.FACE_LANDMARKS_FACE_OVAL, { color: '#C0C0C060', lineWidth: 1 });
+    this.drawer.drawConnectors(lms, FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE, { color: eyeColor, lineWidth: 1 });
+    this.drawer.drawConnectors(lms, FaceLandmarker.FACE_LANDMARKS_LEFT_EYE, { color: eyeColor, lineWidth: 1 });
+    this.drawer.drawConnectors(lms, FaceLandmarker.FACE_LANDMARKS_RIGHT_IRIS, { color: '#14B8A6', lineWidth: 1 });
+    this.drawer.drawConnectors(lms, FaceLandmarker.FACE_LANDMARKS_LEFT_IRIS, { color: '#14B8A6', lineWidth: 1 });
 
     const anchor = this.calibration?.anchor;
     if (anchor && nose) {

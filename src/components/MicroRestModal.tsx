@@ -27,7 +27,7 @@ export const MicroRestModal: React.FC = () => {
   if (!show) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] bg-slate-900/95 backdrop-blur-xl flex flex-col items-center justify-center p-6">
+    <div className="fixed inset-0 z-[60] bg-slate-950 flex flex-col items-center justify-center p-6">
       <div className="text-center mb-12 fade-in max-w-xl">
         <h2 className="text-4xl font-bold text-white mb-4">20-20-20 Eye Break</h2>
         <p className="text-sm text-slate-400 mb-3">

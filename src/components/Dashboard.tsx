@@ -80,10 +80,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onHome }) => {
         {alerts.map((alert) => (
           <div
             key={alert.id}
-            className={`flex items-center justify-between p-4 rounded-xl shadow-lg border backdrop-blur-md fade-in
-              ${alert.type === 'severe' ? 'bg-severe/20 border-severe/50 text-white' :
-                alert.type === 'warning' ? 'bg-warning/20 border-warning/50 text-white' :
-                'bg-slate-800/80 border-slate-600 text-slate-200'}`}
+            className={`flex items-center justify-between p-4 rounded-xl shadow-lg border fade-in
+              ${alert.type === 'severe' ? 'bg-[#2a1018] border-severe/60 text-white' :
+                alert.type === 'warning' ? 'bg-[#2a1f0b] border-warning/60 text-white' :
+                'bg-slate-800 border-slate-600 text-slate-200'}`}
           >
             <p className="font-semibold text-sm mr-4">{alert.message}</p>
             <button onClick={() => store().removeAlert(alert.id)} className="hover:opacity-70" aria-label="Dismiss">
@@ -94,7 +94,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onHome }) => {
       </div>
 
       {showAudioGuide && (
-        <div className="fixed inset-0 z-50 bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-6">
+        <div className="fixed inset-0 z-50 bg-slate-900/90 flex items-center justify-center p-6">
           <div className="glass-panel max-w-2xl p-8 relative border border-white/10">
             <button onClick={() => setShowAudioGuide(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white">
               <X className="w-6 h-6" />

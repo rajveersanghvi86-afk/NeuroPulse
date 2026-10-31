@@ -43,8 +43,11 @@ function beep() {
   }
 }
 
-/** Collects new frames from the engine for `ms`, then calls back. */
-function collectFrames(ms: number, onDone: (frames: { at: number; s: FrameSample }[]) => void) {
+/**
+ * Collects new frames from the engine for `ms`, then calls back. With `untilCount`, it keeps
+ * going (up to `maxMs`) until it has that many frames, so slow computers don't need retries.
+ */
+function collectFrames(ms: number, onDone: (frames: { at: number; s: FrameSample }[]) => void, untilCount = 0, maxMs = ms) {
   const out: { at: number; s: FrameSample }[] = [];
   let lastT = -1;
   const start = performance.now();
@@ -54,7 +57,8 @@ function collectFrames(ms: number, onDone: (frames: { at: number; s: FrameSample
       lastT = l.time;
       out.push({ at: l.time - start, s: l });
     }
-    if (performance.now() - start >= ms) {
+    const elapsed = performance.now() - start;
+    if ((elapsed >= ms && out.length >= untilCount) || elapsed >= maxMs) {
       clearInterval(id);
       onDone(out);
     }
@@ -77,8 +81,8 @@ export const CalibrationModal: React.FC = () => {
   const [gazeErrorPct, setGazeErrorPct] = useState<number | null>(null);
   const [closedOk, setClosedOk] = useState<boolean | null>(null);
   const samples = useRef<RawSample[]>([]);
-  const fit = useRef<(Omit<VisionCalibration, 'closedEar'> & { gazeErrorPct: number | null }) | null>(null);
-  const closedEar = useRef<number | null>(null);
+  const fit = useRef<(Omit<VisionCalibration, 'closedLid'> & { gazeErrorPct: number | null }) | null>(null);
+  const closedLid = useRef<number | null>(null);
   const timer = useRef<number>(0);
   const phaseRef = useRef<Phase>('intro');
   const stepRef = useRef(0);
@@ -95,7 +99,7 @@ export const CalibrationModal: React.FC = () => {
       setClosedOk(null);
       samples.current = [];
       fit.current = null;
-      closedEar.current = null;
+      closedLid.current = null;
     }
     return () => clearInterval(timer.current);
   }, [open]);
@@ -113,7 +117,7 @@ export const CalibrationModal: React.FC = () => {
     const all = samples.current;
     const center = all.filter((r) => r.point === CENTER).map((r) => r.s);
     const middleRow = all.filter((r) => POINTS[r.point][1] === 0.5).map((r) => r.s);
-    const earBaseline = median(middleRow.map((s) => s.ear));
+    const openLid = median(middleRow.map((s) => s.lid));
     const neutralYaw = median(center.map((s) => s.yaw));
     const neutralPitch = median(center.map((s) => s.pitch));
     const gazeSamples: GazeSample[] = all.map(({ point, s }) => ({
@@ -122,21 +126,22 @@ export const CalibrationModal: React.FC = () => {
     }));
     const gazeModel = fitGazeModel(gazeSamples);
 
-    // How the open-eye level changes with vertical gaze: least squares over the 9 per-point medians.
+    // How the open-eye blink score changes when you look down: least squares over the 9 per-point medians.
     const perPoint = POINTS.map((_, i) => all.filter((r) => r.point === i).map((r) => r.s)).filter((ss) => ss.length > 0);
-    const pv = perPoint.map((ss) => median(ss.map((s) => s.gaze!.v)));
-    const pe = perPoint.map((ss) => median(ss.map((s) => s.ear)));
-    const mv = pv.reduce((a, b) => a + b, 0) / pv.length;
-    const me = pe.reduce((a, b) => a + b, 0) / pe.length;
-    const sxx = pv.reduce((a, v) => a + (v - mv) ** 2, 0);
-    const earGazeSlope = sxx > 1e-8 ? pv.reduce((a, v, i) => a + (v - mv) * (pe[i] - me), 0) / sxx : 0;
-    const rowV = (y: number) => median(all.filter((r) => POINTS[r.point][1] === y).map((r) => r.s.gaze!.v));
-    const gazeV = { top: rowV(0.1), middle: rowV(0.5), bottom: rowV(0.9) };
+    const pl = perPoint.map((ss) => median(ss.map((s) => s.lookDown)));
+    const pb = perPoint.map((ss) => median(ss.map((s) => s.lid)));
+    const ml = pl.reduce((a, b) => a + b, 0) / pl.length;
+    const mb = pb.reduce((a, b) => a + b, 0) / pb.length;
+    const sxx = pl.reduce((a, v) => a + (v - ml) ** 2, 0);
+    const slope = sxx > 1e-6 ? pl.reduce((a, v, i) => a + (v - ml) * (pb[i] - mb), 0) / sxx : 0;
+    const rowLook = (y: number) => median(all.filter((r) => POINTS[r.point][1] === y).map((r) => r.s.lookDown));
+    const lookDown = { top: rowLook(0.1), middle: rowLook(0.5), bottom: rowLook(0.9) };
 
     fit.current = {
-      earGazeSlope: Number.isFinite(earGazeSlope) ? earGazeSlope : 0,
-      gazeV: [gazeV.top, gazeV.middle, gazeV.bottom].every(Number.isFinite) ? gazeV : null,
-      earBaseline,
+      // Only a positive slope makes sense (looking down raises the blink score); cap it to stay sane.
+      lidLookSlope: Number.isFinite(slope) ? Math.max(0, Math.min(1.5, slope)) : 0,
+      lookDown: [lookDown.top, lookDown.middle, lookDown.bottom].every(Number.isFinite) ? lookDown : null,
+      openLid,
       ipdBaseline: median(all.map((r) => r.s.ipd)),
       anchor: { x: median(center.map((s) => s.nose.x)), y: median(center.map((s) => s.nose.y)) },
       neutralYaw,
@@ -154,14 +159,15 @@ export const CalibrationModal: React.FC = () => {
     setRetryMsg(null);
     timer.current = collectFrames(CAPTURE_MS, (frames) => {
       const withGaze = frames.map((f) => f.s).filter((s) => s.gaze);
-      // Drop blink frames: anything well below this point's typical eye openness.
-      const med = withGaze.length ? median(withGaze.map((c) => c.ear)) : 0;
-      const good = withGaze.filter((c) => c.ear > med * 0.75);
+      // Drop blink frames: anything clearly more closed than this point's typical level.
+      const med = withGaze.length ? median(withGaze.map((c) => c.lid)) : 0;
+      const good = withGaze.filter((c) => c.lid < med + 0.2);
       if (good.length < MIN_SAMPLES) {
         setRetryMsg("Couldn't see your eyes clearly. Look at the dot and try again.");
         setPhase('point');
         return;
       }
+      setRetryMsg(null);
       samples.current.push(...good.map((s) => ({ point, s })));
       if (point < POINTS.length - 1) {
         setStep(point + 1);
@@ -170,7 +176,7 @@ export const CalibrationModal: React.FC = () => {
         fitModel();
         setPhase('closedIntro');
       }
-    });
+    }, MIN_SAMPLES + 2, CAPTURE_MS + 1500);
   }, []);
 
   const startClosed = useCallback(() => {
@@ -178,11 +184,11 @@ export const CalibrationModal: React.FC = () => {
     setClosedOk(null);
     timer.current = collectFrames(CLOSED_TOTAL_MS, (frames) => {
       beep();
-      const ears = frames.filter((f) => f.at >= CLOSED_SAMPLE_FROM_MS && f.at <= CLOSED_SAMPLE_TO_MS).map((f) => f.s.ear);
-      const openEar = fit.current?.earBaseline ?? 0;
-      const c = ears.length >= 5 ? median(ears) : NaN;
-      if (Number.isFinite(c) && c < openEar * 0.75) {
-        closedEar.current = c;
+      const lids = frames.filter((f) => f.at >= CLOSED_SAMPLE_FROM_MS && f.at <= CLOSED_SAMPLE_TO_MS).map((f) => f.s.lid);
+      const openLid = fit.current?.openLid ?? 0;
+      const c = lids.length >= 5 ? median(lids) : NaN;
+      if (Number.isFinite(c) && c > openLid + 0.2) {
+        closedLid.current = c;
         setClosedOk(true);
         setPhase('done');
       } else {
@@ -211,11 +217,11 @@ export const CalibrationModal: React.FC = () => {
     const f = fit.current;
     if (!f) return;
     const { gazeErrorPct: err, ...vc } = f;
-    visionEngine.setCalibration({ ...vc, closedEar: closedEar.current });
+    visionEngine.setCalibration({ ...vc, closedLid: closedLid.current });
     useTelemetryStore.getState().setCalibration({
       time: Date.now(),
-      earBaseline: vc.earBaseline,
-      closedEar: closedEar.current,
+      openLid: vc.openLid,
+      closedLid: closedLid.current,
       ipdBaseline: vc.ipdBaseline,
       anchor: vc.anchor,
       neutralYaw: vc.neutralYaw,

@@ -3,8 +3,11 @@
 /** Rolling 60-second summary of the eye / head signals. */
 export interface VisionStats {
   faceVisible: boolean;
-  /** Current eye openness (Eye Aspect Ratio, both eyes averaged, lightly smoothed). */
-  ear: number;
+  trackerStatus: 'idle' | 'loading' | 'ready' | 'error';
+  /** Whether the face model runs on the GPU (fast) or CPU. */
+  trackerDelegate: 'GPU' | 'CPU' | null;
+  /** Current raw blink score from the face model, both eyes averaged (0 open .. ~1 closed). */
+  lid: number;
   /** Live closure on the person's own scale: 0 = normal open, 1 = closed. */
   closure: number;
   /** True while a blink / closure is in progress. */
@@ -19,8 +22,8 @@ export interface VisionStats {
   closedCalibrated: boolean;
   /** Face-tracker frames per second. Below ~15, short blinks can be missed. */
   fps: number;
-  /** The open-eye EAR we compare against (calibrated, or estimated from recent frames). */
-  earBaseline: number;
+  /** The open-eye blink score we compare against (calibrated, or estimated from recent frames). */
+  openLid: number;
   baselineSource: 'calibrated' | 'adaptive' | 'default';
   /** Fraction of valid time (0-1) the eyes were at least ~80% closed (PERCLOS P80). */
   perclos: number;
@@ -102,8 +105,9 @@ export interface ReactionResult {
 
 export interface CalibrationInfo {
   time: number;
-  earBaseline: number;
-  closedEar: number | null;
+  /** Blink score with eyes open / gently closed, measured in calibration. */
+  openLid: number;
+  closedLid: number | null;
   ipdBaseline: number;
   anchor: { x: number; y: number };
   neutralYaw: number;

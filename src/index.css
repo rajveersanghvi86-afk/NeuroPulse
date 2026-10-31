@@ -11,7 +11,7 @@
 
 @layer components {
   .glass-panel {
-    @apply bg-gradient-glass backdrop-blur-xl border border-white/5 rounded-2xl shadow-glass;
+    @apply bg-gradient-glass border border-white/5 rounded-2xl shadow-glass;
   }
 }
 
