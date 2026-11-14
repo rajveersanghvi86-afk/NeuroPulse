@@ -5,6 +5,7 @@ import type { FrameSample, VisionCalibration } from '../lib/visionEngine';
 import { fitGazeModel, leaveOnePointOutError } from '../lib/gazeModel';
 import type { GazeSample } from '../lib/gazeModel';
 import { CheckCircle2, ScanFace, AlertTriangle, EyeOff } from 'lucide-react';
+import { t as i18n, useT } from '../i18n';
 
 const POINTS: [number, number][] = [
   [0.1, 0.1], [0.5, 0.1], [0.9, 0.1],
@@ -74,6 +75,7 @@ export const CalibrationModal: React.FC = () => {
   const calibration = useTelemetryStore((s) => s.calibration);
   const skipped = useTelemetryStore((s) => s.calibrationSkipped);
 
+  const t = useT();
   const [phase, setPhase] = useState<Phase>('intro');
   const [step, setStep] = useState(0);
   const [faceOk, setFaceOk] = useState(false);
@@ -163,7 +165,7 @@ export const CalibrationModal: React.FC = () => {
       const med = withGaze.length ? median(withGaze.map((c) => c.lid)) : 0;
       const good = withGaze.filter((c) => c.lid < med + 0.2);
       if (good.length < MIN_SAMPLES) {
-        setRetryMsg("Couldn't see your eyes clearly. Look at the dot and try again.");
+        setRetryMsg(i18n('k_retry'));
         setPhase('point');
         return;
       }
@@ -240,27 +242,24 @@ export const CalibrationModal: React.FC = () => {
       {phase === 'intro' && (
         <div className="glass-panel max-w-lg p-8 text-center">
           <ScanFace className="w-12 h-12 text-baseline mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-white mb-3">Calibration (about 30 s)</h2>
+          <h2 className="text-2xl font-bold text-white mb-3">{t('k_title')}</h2>
           <p className="text-slate-300 mb-4 text-sm leading-relaxed">
-            Sit the way you normally work, with your face lit from the front. For each of the 9 dots:
-            <strong className="text-white"> look at it and press Space (or click it)</strong>, then keep looking for a moment.
-            At the end you'll close your eyes for 3 seconds.
+            {t('k_intro')}
           </p>
           <p className="text-slate-400 mb-6 text-xs leading-relaxed">
-            This learns your normal open and closed eye levels (so blinks are detected reliably), your posture,
-            and how your eyes map to the screen.
+            {t('k_why')}
           </p>
           <div className={`mb-6 text-sm font-semibold ${faceOk ? 'text-baseline' : 'text-warning'}`}>
-            {faceOk ? '✓ Face detected' : 'Waiting for your face… (the tracker can take a few seconds to load)'}
+            {faceOk ? t('k_faceOk') : t('k_faceWait')}
           </div>
           <div className="flex gap-3 justify-center">
-            <button onClick={skip} className="px-5 py-2.5 rounded-full bg-slate-800 text-slate-300 hover:bg-slate-700">Skip</button>
+            <button onClick={skip} className="px-5 py-2.5 rounded-full bg-slate-800 text-slate-300 hover:bg-slate-700">{t('skip')}</button>
             <button
               disabled={!faceOk}
               onClick={() => setPhase('point')}
               className="px-6 py-2.5 rounded-full bg-baseline text-slate-900 font-bold disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              Start
+              {t('start')}
             </button>
           </div>
         </div>
@@ -269,11 +268,11 @@ export const CalibrationModal: React.FC = () => {
       {(phase === 'point' || capturing) && (
         <>
           <div className="absolute top-10 text-center w-full max-w-md px-4 pointer-events-none">
-            <p className="text-slate-300">Look at the dot and press <kbd className="px-1.5 py-0.5 bg-slate-700 rounded text-white text-xs">Space</kbd> or click it.</p>
+            <p className="text-slate-300">{t('k_dot')}</p>
             <div className="w-full bg-slate-800 h-2 mt-4 rounded-full overflow-hidden">
               <div className="bg-baseline h-full transition-[width] duration-200" style={{ width: `${(step / POINTS.length) * 100}%` }} />
             </div>
-            {!faceOk && <p className="text-warning text-sm mt-3">Face not detected. Check your camera and lighting.</p>}
+            {!faceOk && <p className="text-warning text-sm mt-3">{t('k_noFace')}</p>}
             {retryMsg && (
               <p className="text-warning text-sm mt-3 flex items-center justify-center gap-2">
                 <AlertTriangle className="w-4 h-4" /> {retryMsg}
@@ -303,22 +302,21 @@ export const CalibrationModal: React.FC = () => {
       {(phase === 'closedIntro' || phase === 'closing') && (
         <div className="glass-panel max-w-md p-8 text-center">
           <EyeOff className="w-12 h-12 text-baseline mx-auto mb-4" />
-          <h3 className="text-2xl font-bold text-white mb-3">{phase === 'closing' ? 'Eyes closed…' : 'Last step: close your eyes'}</h3>
+          <h3 className="text-2xl font-bold text-white mb-3">{phase === 'closing' ? t('k_closing') : t('k_closeT')}</h3>
           {phase === 'closing' ? (
-            <p className="text-slate-300 text-sm">Keep them gently closed. Open them when you hear the beep.</p>
+            <p className="text-slate-300 text-sm">{t('k_closingHint')}</p>
           ) : (
             <>
               <p className="text-slate-300 text-sm mb-2">
-                Press Space or Start, then <strong className="text-white">gently close your eyes</strong> (don't squeeze) and keep your head still.
-                Open them when you hear the beep (3 s).
+                {t('k_closeIntro')}
               </p>
-              <p className="text-slate-500 text-xs mb-5">This tells NeuroPulse what "closed" looks like for your eyes on this camera, so blinks register reliably.</p>
+              <p className="text-slate-500 text-xs mb-5">{t('k_closeWhy')}</p>
               {closedOk === false && (
-                <p className="text-warning text-sm mb-4">Your eyes still looked open. Try again, or skip this step.</p>
+                <p className="text-warning text-sm mb-4">{t('k_closeFail')}</p>
               )}
               <div className="flex gap-3 justify-center">
-                <button onClick={() => setPhase('done')} className="px-5 py-2.5 rounded-full bg-slate-800 text-slate-300 hover:bg-slate-700">Skip step</button>
-                <button onClick={startClosed} className="px-6 py-2.5 rounded-full bg-baseline text-slate-900 font-bold">Start</button>
+                <button onClick={() => setPhase('done')} className="px-5 py-2.5 rounded-full bg-slate-800 text-slate-300 hover:bg-slate-700">{t('k_skipStep')}</button>
+                <button onClick={startClosed} className="px-6 py-2.5 rounded-full bg-baseline text-slate-900 font-bold">{t('start')}</button>
               </div>
             </>
           )}
@@ -328,21 +326,21 @@ export const CalibrationModal: React.FC = () => {
       {phase === 'done' && (
         <div className="glass-panel p-8 max-w-md text-center">
           <CheckCircle2 className="w-16 h-16 text-baseline mx-auto mb-4" />
-          <h3 className="text-2xl font-bold text-white mb-3">Calibration complete</h3>
+          <h3 className="text-2xl font-bold text-white mb-3">{t('k_done')}</h3>
           {gazeErrorPct !== null ? (
-            <p className="text-slate-300 text-sm mb-2">
-              Estimated gaze error: <strong className={gazeErrorPct > 20 ? 'text-warning' : 'text-baseline'}>≈ {gazeErrorPct.toFixed(0)}% of the screen</strong>
+            <p className={`text-sm mb-2 font-semibold ${gazeErrorPct > 20 ? 'text-warning' : 'text-baseline'}`}>
+              {t('k_gaze', { v: gazeErrorPct.toFixed(0) })}
             </p>
           ) : (
-            <p className="text-warning text-sm mb-2">Gaze mapping couldn't be fitted. Fatigue metrics still work.</p>
+            <p className="text-warning text-sm mb-2">{t('k_gazeFail')}</p>
           )}
-          <p className="text-slate-300 text-sm mb-2">
-            Closed-eye level: {closedOk ? <strong className="text-baseline">measured</strong> : <span className="text-warning">estimated (step skipped)</span>}
+          <p className={`text-sm mb-2 ${closedOk ? 'text-slate-300' : 'text-warning'}`}>
+            {t(closedOk ? 'k_levelMeasured' : 'k_levelEst')}
           </p>
           <p className="text-slate-500 text-xs mb-6">
-            Webcam gaze is coarse. It's fine for a heatmap of roughly where you looked, not for precise points.
+            {t('k_note')}
           </p>
-          <button onClick={commit} className="px-6 py-2.5 rounded-full bg-baseline text-slate-900 font-bold">Continue</button>
+          <button onClick={commit} className="px-6 py-2.5 rounded-full bg-baseline text-slate-900 font-bold">{t('k_cont')}</button>
         </div>
       )}
     </div>

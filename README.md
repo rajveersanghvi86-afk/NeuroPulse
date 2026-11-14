@@ -21,7 +21,7 @@ Live: https://rajveersanghvi86-afk.github.io/NeuroPulse/
 | **Blink duration** | A blink is counted when the lids pass 50% closure and ends below 30% (hysteresis). Duration = time past half-closure; median of normal blinks (< 0.5 s). | Blinks slow down with fatigue. |
 | **Eyelid droop** | Median open-eye EAR ÷ calibrated baseline. | Heavy lids are an early sign. |
 | **Long closures** | Closures ≥ 0.5 s in the last minute. | Microsleep-like events. |
-| **Reaction time** | A one-minute Psychomotor Vigilance Task (12 trials, 2–6 s random waits, lapses ≥ 500 ms). Compared with your personal baseline, which is saved locally. | Reaction-time slowing and lapses track sleepiness closely. |
+| **Reaction time** | A 30-second Psychomotor Vigilance Task (6 trials, 2–6 s random waits, lapses ≥ 500 ms). Compared with your personal baseline, which is saved locally. | Reaction-time slowing and lapses track sleepiness closely. |
 | **Harsh audio exposure** | Loudness of 2–4 kHz above the room's own quiet level, weighted by treble balance (2–4 kHz vs 300–2000 Hz), integrated over about a minute. The dashboard also shows a plain "sound detected" level meter, and warns if the input is silent or the browser has paused audio. | Treble-heavy call audio is tiring. This is a comfort index, not an SPL/hearing-safety measure. |
 
 Supporting measurements: **head pose in degrees** (from the 3D face mesh), **face lighting** (mean luminance of the face region), and **posture** relative to calibration (leaning in, head dropped). Frames with the head turned more than 25° or in very poor light are excluded from the eye metrics.
@@ -55,6 +55,15 @@ A 20-20-20 eye break is suggested every 20 minutes, or after the MFI has been el
 
 ---
 
+## Languages
+
+The whole app is available in **10 languages**: English, Hindi, Spanish, French, German, Portuguese, Russian, Chinese, Japanese and Arabic. Pick one from the language menu on the landing page or the dashboard.
+
+- The choice is saved in your browser and restored on every visit. On a first visit the browser's language is used if it is supported.
+- The PDF report and the CSV column names are generated in the selected language.
+- In the PDF, Latin-script text is real, selectable text. Scripts the built-in PDF fonts can't draw (Devanagari, Cyrillic, Chinese, Japanese, Arabic) are rendered by the browser's text engine and embedded, so they always display correctly.
+- Each language loads only when selected. To add one, copy `src/i18n/en.ts`, translate the values, and register it in `src/i18n/index.ts`; the compiler flags any missing text.
+
 ## Session report
 
 **Finish Session** opens a summary. **Download PDF report** builds a multi-page A4 report in the browser, with:
@@ -62,7 +71,7 @@ A 20-20-20 eye break is suggested every 20 minutes, or after the MFI has been el
 - a fatigue timeline with level bands and eye-break markers
 - key measurements against typical alert ranges
 - what drove the index, with a per-period breakdown
-- reaction tests, the gaze heatmap, and data-quality notes
+- reaction tests, a gaze heatmap (smooth density, share of time in each of 9 screen areas, average gaze point, off-screen share), and data-quality notes
 
 CSV (one row per second, including every signal score) and JSON exports are also available.
 

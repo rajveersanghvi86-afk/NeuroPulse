@@ -4,6 +4,8 @@ import { useTelemetryStore } from '../store/telemetryStore';
 import type { VisionStats } from './types';
 import type { GazeFeatures, GazeModel } from './gazeModel';
 import { predictGaze } from './gazeModel';
+import { t } from '../i18n';
+import type { TKey } from '../i18n';
 
 // The tracker's WASM and model are served from this site (copied in at build time), not a CDN.
 const ASSET_BASE = import.meta.env.BASE_URL;
@@ -311,7 +313,7 @@ export class VisionEngine {
       this.endBlink(t, false);
       this.frames.push({ t, dt, valid: false, closed: false, inBlink: false, lid: 0, closure: 0 });
       this.sustained('noFace', true, t, 2000, () =>
-        this.alert('noFace', 'Face not visible: eye tracking paused.', 'severe', 30000));
+        this.alert('noFace', 'al_noFace', 'severe', 30000));
       this.measureLight(t, null, W, H);
       this.draw(null);
       return;
@@ -421,17 +423,17 @@ export class VisionEngine {
 
     // Safety / posture checks.
     this.sustained('away', !headOk, t, 3000, () =>
-      this.alert('away', 'Head turned away from the screen: eye metrics paused.', 'info', 60000));
+      this.alert('away', 'al_away', 'info', 60000));
     if (cal) {
       this.sustained('close', ipd > cal.ipdBaseline * 1.3, t, 5000, () =>
-        this.alert('close', 'Posture: you are leaning much closer to the screen than when you calibrated.', 'warning', 120000));
+        this.alert('close', 'al_close', 'warning', 120000));
       this.sustained('slump', nose.y - cal.anchor.y > 0.12, t, 5000, () =>
-        this.alert('slump', 'Posture: your head has dropped well below your calibrated position.', 'warning', 120000));
+        this.alert('slump', 'al_slump', 'warning', 120000));
     }
 
     this.measureLight(t, lms, W, H);
     this.sustained('lowLight', this.lightLevel < 45, t, 5000, () =>
-      this.alert('lowLight', 'Low lighting: eye measurements are less reliable. Add light in front of you.', 'warning', 120000));
+      this.alert('lowLight', 'al_lowLight', 'warning', 120000));
 
     // Gaze heatmap logging (5 Hz) when we have a gaze model.
     if (cal?.gazeModel && valid && this.blinkStart === null && t - this.lastGazeLog >= 200) {
@@ -520,11 +522,11 @@ export class VisionEngine {
     if (t - (this.since[key] as number) >= holdMs) fire();
   }
 
-  private alert(key: string, msg: string, type: 'warning' | 'severe' | 'info', cooldownMs: number) {
+  private alert(key: string, msg: TKey, type: 'warning' | 'severe' | 'info', cooldownMs: number) {
     const now = Date.now();
     if (now - (this.alertCooldown[key] ?? 0) < cooldownMs) return;
     this.alertCooldown[key] = now;
-    useTelemetryStore.getState().addAlert(msg, type);
+    useTelemetryStore.getState().addAlert(t(msg), type);
   }
 
   // ---------- rolling stats ----------

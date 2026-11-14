@@ -6,6 +6,9 @@ import { MFIGauge } from './MFIGauge';
 import { MitigationPanel } from './MitigationPanel';
 import { visionEngine } from '../lib/visionEngine';
 import { acousticEngine } from '../lib/acousticEngine';
+import { MFI_LEVELS } from '../lib/mfiCalculator';
+import { LANGUAGES, useT } from '../i18n';
+import { LanguageSelect } from './LanguageSelect';
 import { Activity, BrainCircuit, X, RefreshCw, FileText, Timer, ShieldCheck, HelpCircle } from 'lucide-react';
 import { driver } from 'driver.js';
 import 'driver.js/dist/driver.css';
@@ -16,7 +19,30 @@ interface DashboardProps {
 
 const btn = 'px-4 py-2.5 rounded-full font-semibold transition-all shadow-glass bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center gap-2';
 
+/** Sparkline of the fatigue index over the last five minutes. */
+const TrendLine: React.FC<{ label: string }> = ({ label }) => {
+  const data = useTelemetryStore((s) => s.sessionData);
+  const recent = data.slice(-300);
+  if (recent.length < 10) return null;
+  const W = 220, H = 40;
+  const y = (v: number) => H - (Math.max(0, Math.min(100, v)) / 100) * H;
+  const pts = recent.map((d, i) => `${((i / (recent.length - 1)) * W).toFixed(1)},${y(d.mfi).toFixed(1)}`).join(' ');
+  const last = recent[recent.length - 1].mfi;
+  const color = last >= MFI_LEVELS.severe ? '#F43F5E' : last >= MFI_LEVELS.elevated ? '#F59E0B' : '#14B8A6';
+  return (
+    <div className="w-full mt-3">
+      <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">{label}</div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-10" preserveAspectRatio="none" role="img" aria-label={label}>
+        <line x1="0" x2={W} y1={y(MFI_LEVELS.elevated)} y2={y(MFI_LEVELS.elevated)} stroke="#F59E0B" strokeOpacity="0.3" strokeDasharray="3 3" />
+        <line x1="0" x2={W} y1={y(MFI_LEVELS.severe)} y2={y(MFI_LEVELS.severe)} stroke="#F43F5E" strokeOpacity="0.3" strokeDasharray="3 3" />
+        <polyline points={pts} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+      </svg>
+    </div>
+  );
+};
+
 export const Dashboard: React.FC<DashboardProps> = ({ onHome }) => {
+  const t = useT();
   const mfi = useTelemetryStore((s) => s.mfi);
   const breakdown = useTelemetryStore((s) => s.breakdown);
   const isTracking = useTelemetryStore((s) => s.isTracking);
@@ -29,19 +55,24 @@ export const Dashboard: React.FC<DashboardProps> = ({ onHome }) => {
   const [showAudioGuide, setShowAudioGuide] = useState(false);
 
   const startTour = () => {
+    const step = (element: string, title: string, description: string, side: 'top' | 'bottom' | 'left' | 'right', align: 'start' | 'end' = 'start') =>
+      ({ element, popover: { title, description, side, align } });
     const driverObj = driver({
       showProgress: true,
+      nextBtnText: t('t_next'),
+      prevBtnText: t('t_prev'),
+      doneBtnText: t('done'),
       steps: [
-        { element: '#tour-btn', popover: { title: 'Welcome to NeuroPulse', description: 'A quick tour of the dashboard.', side: 'bottom', align: 'start' } },
-        { element: '#start-telemetry-btn', popover: { title: 'Start Tracking', description: 'Starts the camera and audio analysis. Everything is processed in your browser. You will be asked to calibrate first.', side: 'bottom', align: 'start' } },
-        { element: '#reaction-test-btn', popover: { title: 'Reaction Test', description: 'A one-minute reaction test (a short Psychomotor Vigilance Task). Take one when you feel fresh to set your baseline, then again later to see if you have slowed down.', side: 'bottom', align: 'start' } },
-        { element: '#recalibrate-btn', popover: { title: 'Recalibrate', description: 'Redo calibration if you change seat, lighting or posture.', side: 'bottom', align: 'start' } },
-        { element: '#finish-session-btn', popover: { title: 'Finish Session', description: 'Stops tracking and opens a summary you can export as PDF, CSV or JSON.', side: 'bottom', align: 'start' } },
-        { element: '#camera-audio-controls', popover: { title: 'Camera & Audio', description: 'Turn the camera off for audio-only mode, or capture a browser tab (web Zoom/Meet/Teams) instead of your microphone.', side: 'top', align: 'end' } },
-        { element: '#webcam-feed', popover: { title: 'Eye Tracking', description: 'Measures eye openness, blinks, PERCLOS (time with eyes mostly closed), head pose and lighting.', side: 'right', align: 'start' } },
-        { element: '#audio-visualizer', popover: { title: 'Audio Spectrum', description: 'Live spectrum. The amber band (2-4 kHz) is the harsh range our ears are most sensitive to.', side: 'right', align: 'start' } },
-        { element: '#mfi-gauge', popover: { title: 'Fatigue Index (MFI)', description: 'Combines the signals below into one 0-100 estimate. The breakdown shows what is driving it and the confidence shows how much data it has.', side: 'left', align: 'start' } },
-        { element: '#active-mitigation', popover: { title: 'Suggestions', description: 'Practical suggestions based on what is driving your fatigue right now.', side: 'left', align: 'start' } },
+        step('#tour-btn', t('t_welcome'), t('t_1'), 'bottom'),
+        step('#language-select', t('lang'), LANGUAGES.map((l) => l.name).join(' · '), 'bottom'),
+        step('#start-telemetry-btn', t('d_start'), t('t_2'), 'bottom'),
+        step('#reaction-test-btn', t('d_reaction'), t('t_3'), 'bottom'),
+        step('#finish-session-btn', t('d_finish'), t('t_4'), 'bottom'),
+        step('#camera-audio-controls', t('t_5t'), t('t_5'), 'top', 'end'),
+        step('#webcam-feed', t('t_6t'), t('t_6'), 'right'),
+        step('#audio-visualizer', t('t_7t'), t('t_7'), 'right'),
+        step('#mfi-gauge', t('d_mfi'), t('t_8'), 'left'),
+        step('#active-mitigation', t('d_sugg'), t('t_9'), 'left'),
       ],
     });
     driverObj.drive();
@@ -56,6 +87,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onHome }) => {
       /* storage blocked */
     }
     if (!seen) startTour();
+    // Only on first mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleRecalibrate = () => {
@@ -99,20 +132,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ onHome }) => {
             <button onClick={() => setShowAudioGuide(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white">
               <X className="w-6 h-6" />
             </button>
-            <h2 className="text-2xl font-bold text-white mb-4">Audio sources</h2>
+            <h2 className="text-2xl font-bold text-white mb-4">{t('g_title')}</h2>
             <p className="text-slate-300 mb-6">
-              Browsers can't listen to desktop apps like the Zoom or Teams apps directly. Pick one:
+              {t('g_intro')}
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="p-4 bg-slate-800/50 rounded-lg border border-slate-700">
-                <h3 className="font-bold text-baseline mb-2">Microphone (default)</h3>
-                <p className="text-sm text-slate-400">Measures the sound in your room, including speaker output and your own voice. Call Assist isn't available.</p>
+                <h3 className="font-bold text-baseline mb-2">{t('d_mic')}</h3>
+                <p className="text-sm text-slate-400">{t('g_micd')}</p>
               </div>
               <div className="p-4 bg-slate-800/50 rounded-lg border border-slate-700">
-                <h3 className="font-bold text-baseline mb-2">System (Tab Capture)</h3>
+                <h3 className="font-bold text-baseline mb-2">{t('d_system')}</h3>
                 <p className="text-sm text-slate-400">
-                  For web-based Zoom, Meet or Teams. Share the call's tab and tick <em>"Share tab audio"</em> (Chrome/Edge).
-                  The tab's audio then plays through NeuroPulse, so Call Assist can soften it.
+                  {t('g_sysd')}
                 </p>
               </div>
             </div>
@@ -126,16 +158,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ onHome }) => {
           <h1 className="text-4xl font-bold tracking-tight text-white">Neuro<span className="text-baseline">Pulse</span></h1>
         </div>
 
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <LanguageSelect />
           <button id="tour-btn" onClick={startTour} className={btn}>
-            <HelpCircle className="w-4 h-4" /> Tour
+            <HelpCircle className="w-4 h-4" /> {t('d_tour')}
           </button>
           <button id="reaction-test-btn" onClick={() => store().setShowReactionTest(true)} className={btn}>
-            <Timer className="w-4 h-4" /> Reaction Test
+            <Timer className="w-4 h-4" /> {t('d_reaction')}
           </button>
           {isTracking && cameraEnabled && (
             <button id="recalibrate-btn" onClick={handleRecalibrate} className={btn}>
-              <RefreshCw className="w-4 h-4" /> Recalibrate
+              <RefreshCw className="w-4 h-4" /> {t('d_recal')}
             </button>
           )}
           <button
@@ -147,14 +180,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ onHome }) => {
             }}
             className={`px-6 py-2.5 rounded-full font-semibold transition-all shadow-glass ${isTracking ? 'bg-severe/20 text-severe hover:bg-severe/30' : 'bg-baseline/20 text-baseline hover:bg-baseline/30'}`}
           >
-            {isTracking ? 'Pause Tracking' : sessionDataLength > 0 ? 'Resume Tracking' : 'Start Tracking'}
+            {t(isTracking ? 'd_pause' : sessionDataLength > 0 ? 'd_resume' : 'd_start')}
           </button>
           <button
             id="finish-session-btn"
             onClick={handleFinishSession}
             className="px-4 py-2.5 rounded-full font-semibold transition-all shadow-glass bg-baseline text-slate-900 hover:bg-baseline/80 flex items-center gap-2"
           >
-            <FileText className="w-4 h-4" /> Finish Session
+            <FileText className="w-4 h-4" /> {t('d_finish')}
           </button>
         </div>
       </header>
@@ -162,7 +195,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onHome }) => {
       <div className="w-full max-w-6xl flex justify-end gap-2 mb-4">
         <div id="camera-audio-controls" className="flex flex-wrap items-center gap-4 bg-slate-800/80 px-4 py-2 rounded-lg border border-slate-700">
           <div className="flex items-center gap-2 border-r border-slate-700 pr-4">
-            <span className="text-sm font-semibold text-slate-300">Camera:</span>
+            <span className="text-sm font-semibold text-slate-300">{t('d_camera')}:</span>
             <button
               onClick={() => store().setCameraEnabled(!cameraEnabled)}
               className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${cameraEnabled ? 'bg-baseline' : 'bg-slate-600'}`}
@@ -170,17 +203,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ onHome }) => {
             >
               <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${cameraEnabled ? 'translate-x-5' : 'translate-x-1'}`} />
             </button>
-            <span className="text-xs text-slate-400">{cameraEnabled ? 'On' : 'Off'}</span>
+            <span className="text-xs text-slate-400">{t(cameraEnabled ? 'd_on' : 'd_off')}</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-slate-300">Audio:</span>
+            <span className="text-sm font-semibold text-slate-300">{t('d_audio')}:</span>
             <select
               className="bg-slate-900 text-white border border-slate-600 rounded px-2 py-1 text-sm outline-none cursor-pointer"
               value={audioMode}
               onChange={(e) => handleAudioMode(e.target.value as 'mic' | 'system')}
             >
-              <option value="mic">Microphone</option>
-              <option value="system">System (Tab Capture)</option>
+              <option value="mic">{t('d_mic')}</option>
+              <option value="system">{t('d_system')}</option>
             </select>
             <button onClick={() => setShowAudioGuide(true)} className="text-slate-400 hover:text-white ml-2" aria-label="Audio help">
               <HelpCircle className="w-4 h-4" />
@@ -196,7 +229,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onHome }) => {
           </div>
           <div id="audio-visualizer" className="glass-panel p-6 h-56 flex flex-col">
             <h3 className="text-sm uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-2">
-              <Activity className="w-4 h-4" /> Audio Spectrum (2–4 kHz highlighted)
+              <Activity className="w-4 h-4" /> {t('d_spectrum')}
             </h3>
             <div className="flex-1 min-h-0">
               <AudioVisualizer />
@@ -206,8 +239,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ onHome }) => {
 
         <div className="md:col-span-4 flex flex-col gap-6 fade-in" style={{ animationDelay: '0.2s' }}>
           <div id="mfi-gauge" className="glass-panel p-6 flex flex-col items-center">
-            <h3 className="text-sm uppercase tracking-wider text-slate-400 mb-2 self-start">Fatigue Index (MFI)</h3>
+            <div className="w-full flex justify-between items-baseline mb-2 gap-2">
+              <h3 className="text-sm uppercase tracking-wider text-slate-400">{t('d_mfi')}</h3>
+              {sessionDataLength > 0 && (
+                <span className="text-xs font-mono text-slate-500 shrink-0">
+                  {t('d_session')} {Math.floor(sessionDataLength / 60)}:{String(sessionDataLength % 60).padStart(2, '0')}
+                </span>
+              )}
+            </div>
             <MFIGauge value={mfi} confidence={breakdown?.confidence ?? 0} />
+            <TrendLine label={t('d_trend')} />
             {breakdown && (
               <div className="w-full mt-4 flex flex-col gap-2">
                 {breakdown.components.map((c) => {
@@ -216,8 +257,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onHome }) => {
                   return (
                     <div key={c.key} className={on ? '' : 'opacity-40'}>
                       <div className="flex justify-between text-xs mb-0.5">
-                        <span className="text-slate-300">{c.label}</span>
-                        <span className="text-slate-400 font-mono">{on ? `${s.toFixed(0)}` : 'n/a'}</span>
+                        <span className="text-slate-300">{t(`c_${c.key}`)}</span>
+                        <span className="text-slate-400 font-mono">{on ? `${s.toFixed(0)}` : t('na')}</span>
                       </div>
                       <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
                         <div
@@ -233,7 +274,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onHome }) => {
           </div>
 
           <div id="active-mitigation" className="glass-panel p-6 flex-1">
-            <h3 className="text-sm uppercase tracking-wider text-slate-400 mb-4">Suggestions</h3>
+            <h3 className="text-sm uppercase tracking-wider text-slate-400 mb-4">{t('d_sugg')}</h3>
             <MitigationPanel />
           </div>
         </div>
@@ -242,9 +283,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onHome }) => {
       <footer className="w-full max-w-6xl flex flex-col items-center gap-2 pb-6">
         <div className="flex items-center gap-2 px-4 py-2 bg-slate-800/50 rounded-full border border-slate-700/50 text-slate-400 text-sm">
           <ShieldCheck className="w-4 h-4 text-baseline" />
-          <span>All processing happens in your browser. No video, audio or measurements are uploaded.</span>
+          <span>{t('d_privacy')}</span>
         </div>
-        <p className="text-xs text-slate-600">NeuroPulse gives wellbeing estimates, not a medical diagnosis.</p>
+        <p className="text-xs text-slate-600">{t('d_disc')}</p>
       </footer>
     </div>
   );

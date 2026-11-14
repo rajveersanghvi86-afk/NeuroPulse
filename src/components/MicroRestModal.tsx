@@ -2,11 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTelemetryStore } from '../store/telemetryStore';
 import { CheckCircle } from 'lucide-react';
+import { useT } from '../i18n';
 
 export const MicroRestModal: React.FC = () => {
   const show = useTelemetryStore((s) => s.showMicroRestModal);
   const reason = useTelemetryStore((s) => s.microRestReason);
   const closeMicroRest = useTelemetryStore((s) => s.closeMicroRest);
+  const t = useT();
   const [timeLeft, setTimeLeft] = useState(20);
 
   useEffect(() => {
@@ -29,12 +31,12 @@ export const MicroRestModal: React.FC = () => {
   return (
     <div className="fixed inset-0 z-[60] bg-slate-950 flex flex-col items-center justify-center p-6">
       <div className="text-center mb-12 fade-in max-w-xl">
-        <h2 className="text-4xl font-bold text-white mb-4">20-20-20 Eye Break</h2>
+        <h2 className="text-4xl font-bold text-white mb-4">{t('r_title')}</h2>
         <p className="text-sm text-slate-400 mb-3">
-          {reason === 'fatigue' ? 'Your fatigue index has been elevated for a while.' : "You've been at the screen for 20 minutes."}
+          {t(reason === 'fatigue' ? 'r_fatigue' : 'r_timer')}
         </p>
-        <p className="text-xl text-slate-300">Look at something <span className="text-baseline font-bold">20 feet (6 m) away</span> for 20 seconds.</p>
-        <p className="text-sm text-slate-400 mt-2">Relaxing your focus eases eye strain. Breathe slowly with the circle.</p>
+        <p className="text-xl text-baseline font-semibold">{t('r_look')}</p>
+        <p className="text-sm text-slate-400 mt-2">{t('r_breathe')}</p>
       </div>
 
       <div className="relative flex items-center justify-center w-64 h-64 mb-12">
@@ -58,7 +60,7 @@ export const MicroRestModal: React.FC = () => {
           ) : (
             <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center gap-4 text-baseline">
               <CheckCircle className="w-24 h-24" />
-              <p className="text-2xl font-bold text-white">Eyes rested</p>
+              <p className="text-2xl font-bold text-white">{t('r_done')}</p>
             </motion.div>
           )}
         </AnimatePresence>
@@ -70,7 +72,7 @@ export const MicroRestModal: React.FC = () => {
           timeLeft === 0 ? 'bg-baseline text-slate-900 hover:bg-baseline/80' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
         }`}
       >
-        {timeLeft === 0 ? 'Back to work' : 'Skip'}
+        {timeLeft === 0 ? t('r_back') : t('skip')}
       </button>
     </div>
   );
