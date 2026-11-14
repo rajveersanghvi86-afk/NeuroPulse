@@ -1,11 +1,13 @@
 import React, { useEffect, useRef } from 'react';
 import { useTelemetryStore } from '../store/telemetryStore';
 import { acousticEngine } from '../lib/acousticEngine';
+import { useT } from '../i18n';
 
 const MAX_HZ = 8000;
 
 /** Live spectrum (0-8 kHz) drawn straight from the analyser; the 2-4 kHz band is highlighted. */
 export const AudioVisualizer: React.FC = () => {
+  const t = useT();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isTracking = useTelemetryStore((s) => s.isTracking);
   const acoustic = useTelemetryStore((s) => s.acoustic);
@@ -59,26 +61,26 @@ export const AudioVisualizer: React.FC = () => {
 
   const a = acoustic;
   const level = a ? Math.min(1, a.soundAboveRoomDb / 40) : 0;
-  const treble = a ? (a.tiltDb > -8 ? 'very bright' : a.tiltDb > -14 ? 'bright' : a.tiltDb > -24 ? 'normal' : 'warm') : '';
+  const treble = a ? t(a.tiltDb > -8 ? 'a_tvb' : a.tiltDb > -14 ? 'a_tb' : a.tiltDb > -24 ? 'a_tn' : 'a_tw') : '';
 
   return (
     <div className="w-full h-full relative flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-mono text-slate-300">
         <span className="flex items-center gap-2">
           <span className={`w-2 h-2 rounded-full ${!isTracking || !a ? 'bg-slate-600' : a.soundPresent ? 'bg-baseline animate-pulse' : 'bg-slate-500'}`} />
-          {!isTracking || !a ? 'IDLE' : a.silentForMs > 2000 ? 'No input (silent)' : a.soundPresent ? 'Sound detected' : 'Quiet (room noise only)'}
+          {t(!isTracking || !a ? 'a_idle' : a.silentForMs > 2000 ? 'a_silent' : a.soundPresent ? 'a_detected' : 'a_quiet')}
         </span>
         {isTracking && a && (
           <>
             <span className="flex items-center gap-2">
-              Level
+              {t('a_level')}
               <span className="w-24 h-2 bg-slate-800 rounded-full overflow-hidden inline-block">
                 <span className="block h-full bg-baseline transition-[width] duration-150" style={{ width: `${level * 100}%` }} />
               </span>
-              +{a.soundAboveRoomDb.toFixed(0)} dB over room
+              {t('a_over', { v: a.soundAboveRoomDb.toFixed(0) })}
             </span>
-            {a.soundPresent && <span>Treble: {treble} ({a.tiltDb.toFixed(0)} dB)</span>}
-            <span>Harsh exposure: {a.exposure.toFixed(0)}/100</span>
+            {a.soundPresent && <span>{t('a_treble', { v: treble })} ({a.tiltDb.toFixed(0)} dB)</span>}
+            <span>{t('a_exp', { v: a.exposure.toFixed(0) })}</span>
           </>
         )}
       </div>

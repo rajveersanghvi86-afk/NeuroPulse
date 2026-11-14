@@ -1,14 +1,10 @@
 import type { CalibrationInfo, GazePoint, MFIComponent, ReactionResult, RestEvent, TelemetryDataPoint } from './types';
 import { MFI_LEVELS, mfiLevel, DEFAULT_REACTION_BASELINE_MS } from './mfiCalculator';
+import { summarizeGaze } from './heatmap';
+import type { GazeSummary } from './heatmap';
+import { t } from '../i18n';
 
-export const COMPONENT_LABELS: Record<MFIComponent['key'], string> = {
-  perclos: 'Eye closure (PERCLOS)',
-  blinkDuration: 'Blink duration',
-  eyelidDroop: 'Eyelid droop',
-  longClosures: 'Long eye closures',
-  reaction: 'Reaction time',
-  acoustic: 'Harsh audio exposure',
-};
+export const COMPONENT_KEYS: MFIComponent['key'][] = ['perclos', 'blinkDuration', 'eyelidDroop', 'longClosures', 'reaction', 'acoustic'];
 
 export interface Segment {
   fromMin: number;
@@ -58,6 +54,7 @@ export interface SessionStats {
   reactionBaselineMs: number | null;
   restEvents: RestEvent[];
   gazeCount: number;
+  gazeSummary: GazeSummary | null;
   calibration: CalibrationInfo | null;
   advice: string[];
 }
@@ -104,9 +101,9 @@ export function computeSessionStats(input: {
   const end = data[n - 1]?.time ?? null;
   const eye = data.filter((d) => d.perclos !== null);
 
-  const components = (Object.keys(COMPONENT_LABELS) as MFIComponent['key'][]).map((key) => {
+  const components = COMPONENT_KEYS.map((key) => {
     const vals = nn(data.map((d) => d.scores?.[key]));
-    return { key, label: COMPONENT_LABELS[key], avg: mean(vals), coveragePct: n ? (vals.length / n) * 100 : 0 };
+    return { key, label: t(`c_${key}`), avg: mean(vals), coveragePct: n ? (vals.length / n) * 100 : 0 };
   });
 
   // Segment length so the table has at most ~12 rows.
@@ -177,6 +174,7 @@ export function computeSessionStats(input: {
     reactionBaselineMs: input.reactionBaselineMs,
     restEvents: input.restEvents,
     gazeCount: input.gaze.length,
+    gazeSummary: summarizeGaze(input.gaze),
     calibration: input.calibration,
     advice: [],
   };
@@ -186,30 +184,28 @@ export function computeSessionStats(input: {
 
 function buildAdvice(s: SessionStats): string[] {
   const out: string[] = [];
-  if (s.measuredSeconds < 60) {
-    return ['Track for at least a few minutes with your face visible to get a meaningful report.'];
-  }
+  if (s.measuredSeconds < 60) return [t('adv_short')];
   const rank = { unknown: 0, nominal: 1, elevated: 2, severe: 3 };
   if (rank[s.endLevel] > rank[s.level]) {
-    out.push(`Fatigue was ${s.level === 'nominal' ? 'low' : 'moderate'} on average but reached the ${s.endLevel === 'severe' ? 'high' : 'elevated'} range by the end (about ${s.endMfi!.toFixed(0)}). Take a proper break now.`);
-  } else if (s.level === 'severe') out.push('Strong fatigue signs overall. Stop for a real rest (15-20 minutes away from screens, or a short nap) before demanding work or driving.');
-  else if (s.level === 'elevated') out.push('Moderate fatigue signs. Take a 10-15 minute break away from the screen and switch to lighter tasks if you can.');
-  else out.push('Few fatigue signs this session. Keep up regular short breaks (20-20-20 rule).');
+    out.push(t(s.endLevel === 'severe' ? 'adv_endHigh' : 'adv_endElev', { v: s.endMfi!.toFixed(0) }));
+  } else if (s.level === 'severe') out.push(t('adv_high'));
+  else if (s.level === 'elevated') out.push(t('adv_mod'));
+  else out.push(t('adv_low'));
 
-  if (s.trendMfi !== null && s.trendMfi > 10) out.push(`Fatigue rose by about ${s.trendMfi.toFixed(0)} points from the start to the end of the session: breaks earlier on may help.`);
-  if (s.avgPerclos !== null && s.avgPerclos > 0.08) out.push(`Your eyes were nearly closed ${(s.avgPerclos * 100).toFixed(1)}% of the time (alert is usually under 8%). That's a classic drowsiness sign.`);
-  if (s.totalLongClosures && s.totalLongClosures >= 3) out.push(`${s.totalLongClosures} eye closures of half a second or more were detected. These are microsleep-like events, so avoid anything safety-critical.`);
-  if (s.medianBlinkMs !== null && s.medianBlinkMs > 220) out.push(`Blinks were slow (median ${s.medianBlinkMs.toFixed(0)} ms), which often comes with tiredness.`);
-  if (s.avgBlinkRate !== null && s.avgBlinkRate < 8) out.push(`You blinked only ~${s.avgBlinkRate.toFixed(0)} times a minute. Staring at screens reduces blinking and dries the eyes, so remember to blink fully.`);
+  if (s.trendMfi !== null && s.trendMfi > 10) out.push(t('adv_trend', { v: s.trendMfi.toFixed(0) }));
+  if (s.avgPerclos !== null && s.avgPerclos > 0.08) out.push(t('adv_perclos', { v: (s.avgPerclos * 100).toFixed(1) }));
+  if (s.totalLongClosures && s.totalLongClosures >= 3) out.push(t('adv_long', { n: s.totalLongClosures }));
+  if (s.medianBlinkMs !== null && s.medianBlinkMs > 220) out.push(t('adv_slowBlink', { v: s.medianBlinkMs.toFixed(0) }));
+  if (s.avgBlinkRate !== null && s.avgBlinkRate < 8) out.push(t('adv_fewBlinks', { v: s.avgBlinkRate.toFixed(0) }));
   const r = s.reactions[s.reactions.length - 1];
   if (r) {
     const base = s.reactionBaselineMs ?? DEFAULT_REACTION_BASELINE_MS;
-    if (r.medianMs - base > 40 || r.lapses >= 2) out.push(`Your reaction time (${Math.round(r.medianMs)} ms) was slower than your baseline (${Math.round(base)} ms).`);
+    if (r.medianMs - base > 40 || r.lapses >= 2) out.push(t('adv_rt', { a: Math.round(r.medianMs), b: Math.round(base) }));
   } else {
-    out.push('No reaction test was taken. Adding one gives the most objective fatigue measure.');
+    out.push(t('adv_noTest'));
   }
-  if (s.avgAcoustic !== null && s.avgAcoustic > 30) out.push('There was a lot of loud, treble-heavy audio. Lower the volume, use softer headphones, or try Call Assist with tab capture.');
-  if (s.restEvents.length === 0 && s.wallSeconds > 25 * 60) out.push('No eye breaks were taken during a long session.');
-  if (s.avgLight !== null && s.avgLight < 0.5) out.push('Lighting on your face was poor, which reduces accuracy. A light in front of you helps.');
+  if (s.avgAcoustic !== null && s.avgAcoustic > 30) out.push(t('adv_audio'));
+  if (s.restEvents.length === 0 && s.wallSeconds > 25 * 60) out.push(t('adv_noBreaks'));
+  if (s.avgLight !== null && s.avgLight < 0.5) out.push(t('adv_light'));
   return out;
 }

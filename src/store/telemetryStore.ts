@@ -30,6 +30,26 @@ export const REST_DEBOUNCE_MS = 5 * 60 * 1000;
 /** 20-20-20 rule: a reminder every 20 minutes of tracking. */
 export const REST_INTERVAL_MS = 20 * 60 * 1000;
 
+const PREFS_KEY = 'neuropulse.prefs';
+type Prefs = { cameraEnabled: boolean; audioMode: 'mic' | 'system' };
+
+function loadPrefs(): Prefs {
+  try {
+    const p = JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}');
+    return { cameraEnabled: p.cameraEnabled !== false, audioMode: p.audioMode === 'system' ? 'system' : 'mic' };
+  } catch {
+    return { cameraEnabled: true, audioMode: 'mic' };
+  }
+}
+
+function savePrefs(p: Prefs) {
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify(p));
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 function loadReactionBaseline(): number | null {
   try {
     const v = localStorage.getItem(REACTION_BASELINE_KEY);
@@ -114,8 +134,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
   acoustic: null,
 
   isTracking: false,
-  cameraEnabled: true,
-  audioMode: 'mic',
+  ...loadPrefs(),
   isCallAssistActive: false,
 
   calibration: null,
@@ -138,8 +157,14 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
   setLive: ({ mfi, breakdown, vision, acoustic }) =>
     set({ mfi: mfi === null ? null : Math.max(0, Math.min(100, mfi)), breakdown, vision, acoustic }),
   setIsTracking: (status) => set({ isTracking: status }),
-  setCameraEnabled: (status) => set({ cameraEnabled: status }),
-  setAudioMode: (mode) => set({ audioMode: mode }),
+  setCameraEnabled: (status) => {
+    set({ cameraEnabled: status });
+    savePrefs({ cameraEnabled: status, audioMode: get().audioMode });
+  },
+  setAudioMode: (mode) => {
+    set({ audioMode: mode });
+    savePrefs({ cameraEnabled: get().cameraEnabled, audioMode: mode });
+  },
   setCallAssistActive: (status) => set({ isCallAssistActive: status }),
 
   setCalibration: (c) => set({ calibration: c, calibrationSkipped: false }),

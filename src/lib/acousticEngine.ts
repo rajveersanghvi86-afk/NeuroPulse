@@ -1,4 +1,5 @@
 import type { AcousticStats } from './types';
+import { t } from '../i18n';
 
 const HARSH_LO_HZ = 2000;
 const HARSH_HI_HZ = 4000;
@@ -81,7 +82,7 @@ export class AcousticEngine {
         stream.getVideoTracks().forEach(t => t.stop());
         if (stream.getAudioTracks().length === 0) {
           stream.getTracks().forEach(t => t.stop());
-          return { ok: false, message: 'No tab audio was shared. Choose a browser tab and tick "Share tab audio" (Chrome/Edge).' };
+          return { ok: false, message: t('al_noTabAudio') };
         }
       } else {
         stream = await navigator.mediaDevices.getUserMedia({ audio: raw });
@@ -91,8 +92,8 @@ export class AcousticEngine {
       return {
         ok: false,
         message: name === 'NotFoundError'
-          ? 'No microphone was found. Plug one in or pick "System (Tab Capture)".'
-          : 'Audio access was denied, so audio tracking is off. Allow the microphone in your browser\'s site settings.',
+          ? t('al_noMic')
+          : t('al_audioDenied'),
       };
     }
     if (gen !== this.generation) {

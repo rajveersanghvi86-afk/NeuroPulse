@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { useTelemetryStore } from '../store/telemetryStore';
 import { CameraOff, AlertTriangle, Headphones, Loader2 } from 'lucide-react';
 import { visionEngine } from '../lib/visionEngine';
+import { t as i18n, useT } from '../i18n';
 
 const Row: React.FC<{ label: string; value: string; tone?: 'ok' | 'warn' | 'bad' | 'muted' }> = ({ label, value, tone = 'ok' }) => (
   <div className="flex justify-between gap-4 mb-1 last:mb-0">
@@ -13,6 +14,7 @@ const Row: React.FC<{ label: string; value: string; tone?: 'ok' | 'warn' | 'bad'
 );
 
 export const WebcamFeed: React.FC = () => {
+  const t = useT();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isTracking = useTelemetryStore((s) => s.isTracking);
@@ -45,12 +47,12 @@ export const WebcamFeed: React.FC = () => {
         canvas.height = video.videoHeight || 480;
         visionEngine.start(video, canvas).catch((e) => {
           console.error(e);
-          useTelemetryStore.getState().addAlert('The face tracker failed to load. Check your connection and reload the page.', 'severe');
+          useTelemetryStore.getState().addAlert(i18n('al_trackerFail'), 'severe');
         });
       })
       .catch((err) => {
         console.error('Camera error:', err);
-        useTelemetryStore.getState().addAlert('Camera access denied. Turn the camera off to use audio-only mode.', 'severe');
+        useTelemetryStore.getState().addAlert(i18n('al_camDenied'), 'severe');
       });
 
     return () => {
@@ -69,13 +71,13 @@ export const WebcamFeed: React.FC = () => {
       {!cameraEnabled ? (
         <div className="flex flex-col items-center text-slate-500 gap-2">
           <CameraOff className="w-12 h-12" />
-          <p>Camera off (audio-only mode)</p>
-          <p className="text-xs text-slate-600 max-w-xs text-center">The fatigue index uses audio and reaction tests only, so it's a rougher estimate.</p>
+          <p>{t('h_camOff')}</p>
+          <p className="text-xs text-slate-600 max-w-xs text-center">{t('h_camOffNote')}</p>
         </div>
       ) : !isTracking ? (
         <div className="flex flex-col items-center text-slate-500 gap-2">
           <CameraOff className="w-12 h-12" />
-          <p>Camera offline</p>
+          <p>{t('h_offline')}</p>
         </div>
       ) : (
         <>
@@ -85,39 +87,39 @@ export const WebcamFeed: React.FC = () => {
           {v && v.trackerStatus !== 'ready' && (
             <div className="absolute inset-0 bg-slate-900/80 flex flex-col items-center justify-center z-10 text-slate-300 gap-2">
               <Loader2 className="w-10 h-10 animate-spin text-baseline" />
-              <p className="font-semibold">{v.trackerStatus === 'error' ? 'Face tracker failed to load' : 'Loading face tracker…'}</p>
-              <p className="text-xs text-slate-500">First load downloads about 13 MB; it is cached after that.</p>
+              <p className="font-semibold">{v.trackerStatus === 'error' ? t('h_loadFail') : t('h_loading')}</p>
+              <p className="text-xs text-slate-500">{t('h_loadNote')}</p>
             </div>
           )}
 
           {v && v.trackerStatus === 'ready' && !v.faceVisible && (
             <div className="absolute inset-0 bg-red-900/50 flex flex-col items-center justify-center z-10">
               <AlertTriangle className="w-12 h-12 text-severe mb-2 animate-pulse" />
-              <p className="text-white font-bold text-lg">Face not visible</p>
-              <p className="text-slate-300 text-sm">Eye tracking paused</p>
+              <p className="text-white font-bold text-lg">{t('h_noFace')}</p>
+              <p className="text-slate-300 text-sm">{t('h_paused')}</p>
             </div>
           )}
 
           {isCallAssistActive && (
             <div className="absolute top-4 right-4 bg-baseline/90 px-3 py-1.5 rounded-full text-xs font-bold text-slate-900 border border-white/20 z-20 shadow-lg flex items-center gap-2">
-              <Headphones className="w-4 h-4" /> Call Assist on
+              <Headphones className="w-4 h-4" /> {t('h_ca')}
             </div>
           )}
 
           {v && (
-            <div className="absolute top-4 left-4 bg-slate-900/85 px-3 py-2 rounded-lg text-xs font-mono text-slate-300 border border-white/10 z-20 shadow-lg min-w-[210px]">
+            <div className="absolute top-4 left-4 bg-slate-900/85 px-3 py-2 rounded-lg text-xs font-mono text-slate-300 border border-white/10 z-20 shadow-lg min-w-[230px] max-w-[300px]">
               <Row
-                label="Eye openness"
+                label={t('h_open')}
                 value={`${Math.round(Math.max(0, 1 - v.closure) * 100)}%`}
                 tone={v.closure > 0.35 ? 'warn' : 'ok'}
               />
               <Row
-                label="PERCLOS (% time closed, 60 s)"
-                value={warm ? `${(v.perclos * 100).toFixed(1)}%` : `warming up ${Math.round(v.validSeconds)}/20 s`}
+                label={t('h_perclos')}
+                value={warm ? `${(v.perclos * 100).toFixed(1)}%` : t('h_warm', { a: Math.round(v.validSeconds) })}
                 tone={!warm ? 'muted' : v.perclos > 0.15 ? 'bad' : v.perclos > 0.08 ? 'warn' : 'ok'}
               />
               <div className="flex justify-between items-center gap-4 mb-1">
-                <span className="text-slate-400">Eyelids</span>
+                <span className="text-slate-400">{t('h_lids')}</span>
                 <span className="flex items-center gap-2">
                   <span className="w-14 h-1.5 bg-slate-700 rounded-full overflow-hidden">
                     <span
@@ -125,28 +127,28 @@ export const WebcamFeed: React.FC = () => {
                       style={{ width: `${Math.min(100, Math.max(0, v.closure * 100))}%` }}
                     />
                   </span>
-                  <span className={v.eyesClosedNow ? 'text-warning font-bold' : 'text-baseline'}>{v.eyesClosedNow ? 'closed' : 'open'}</span>
+                  <span className={v.eyesClosedNow ? 'text-warning font-bold' : 'text-baseline'}>{v.eyesClosedNow ? t('h_isClosed') : t('h_isOpen')}</span>
                 </span>
               </div>
-              <Row label="Blinks counted" value={`${v.totalBlinks}${v.lastBlinkMs !== null ? ` · last ${v.lastBlinkMs.toFixed(0)} ms` : ''}`} />
-              <Row label="Blinks / min" value={warm ? v.blinkRate.toFixed(0) : '–'} tone={warm ? 'ok' : 'muted'} />
+              <Row label={t('h_blinks')} value={`${v.totalBlinks}${v.lastBlinkMs !== null ? ` · ${t('h_last', { v: v.lastBlinkMs.toFixed(0) })}` : ''}`} />
+              <Row label={t('h_bpm')} value={warm ? v.blinkRate.toFixed(0) : '–'} tone={warm ? 'ok' : 'muted'} />
               <Row
-                label="Median blink"
+                label={t('h_median')}
                 value={v.medianBlinkMs !== null ? `${v.medianBlinkMs.toFixed(0)} ms` : '–'}
                 tone={v.medianBlinkMs === null ? 'muted' : v.medianBlinkMs > 300 ? 'bad' : v.medianBlinkMs > 200 ? 'warn' : 'ok'}
               />
               <Row
-                label="Head yaw / pitch"
+                label={t('h_head')}
                 value={`${v.yaw.toFixed(0)}° / ${v.pitch.toFixed(0)}°`}
                 tone={Math.abs(v.yaw) > 25 || Math.abs(v.pitch) > 25 ? 'warn' : 'ok'}
               />
-              {v.lookingDown && <Row label="Looking down" value="eye metrics paused" tone="warn" />}
-              <Row label="Tracker speed" value={`${v.fps.toFixed(0)} fps${v.trackerDelegate ? ` (${v.trackerDelegate})` : ''}`} tone={v.fps < 12 ? 'bad' : v.fps < 20 ? 'warn' : 'ok'} />
-              <Row label="Lighting" value={`${Math.round(v.lightQuality * 100)}%`} tone={v.lightQuality < 0.4 ? 'bad' : v.lightQuality < 0.7 ? 'warn' : 'ok'} />
+              {v.lookingDown && <Row label={t('h_down')} value={t('h_downV')} tone="warn" />}
+              <Row label={t('h_speed')} value={`${v.fps.toFixed(0)} fps${v.trackerDelegate ? ` (${v.trackerDelegate})` : ''}`} tone={v.fps < 12 ? 'bad' : v.fps < 20 ? 'warn' : 'ok'} />
+              <Row label={t('h_light')} value={`${Math.round(v.lightQuality * 100)}%`} tone={v.lightQuality < 0.4 ? 'bad' : v.lightQuality < 0.7 ? 'warn' : 'ok'} />
               <div className="mt-2 pt-2 border-t border-white/10 text-[10px] text-slate-500">
                 {calibration
-                  ? `Calibrated${calibration.closedLid === null ? ' (closed-eye level estimated)' : ''}${calibration.gazeErrorPct !== null ? ` · gaze error ≈ ${calibration.gazeErrorPct.toFixed(0)}% of screen` : ''}`
-                  : `Not calibrated · baseline ${v.baselineSource === 'adaptive' ? 'estimated' : 'default'}`}
+                  ? `${t('h_cal')}${calibration.closedLid === null ? ` ${t('h_calEst')}` : ''}${calibration.gazeErrorPct !== null ? ` · ${t('h_gaze', { v: calibration.gazeErrorPct.toFixed(0) })}` : ''}`
+                  : `${t('h_notCal')} · ${t(v.baselineSource === 'adaptive' ? 'h_baseEst' : 'h_baseDef')}`}
               </div>
             </div>
           )}

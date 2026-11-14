@@ -10,6 +10,7 @@ import { REST_INTERVAL_MS } from './store/telemetryStore';
 import { visionEngine } from './lib/visionEngine';
 import { acousticEngine } from './lib/acousticEngine';
 import { computeMFI, MFI_LEVELS, MFISmoother } from './lib/mfiCalculator';
+import { t } from './i18n';
 
 const SUSTAINED_FATIGUE_MS = 30000;
 
@@ -45,7 +46,7 @@ function App() {
 
     const onVisibility = () => {
       if (document.hidden) {
-        store().addAlert('NeuroPulse is in a background tab: the browser slows tracking down. Keep it visible in a side window.', 'info');
+        store().addAlert(t('al_bgTab'), 'info');
       }
     };
     document.addEventListener('visibilitychange', onVisibility);
@@ -62,19 +63,17 @@ function App() {
       // Audio diagnostics: tell the user why nothing is being picked up.
       if (acoustic) {
         if (acousticEngine.contextState === 'suspended') {
-          s.addAlert('Audio is paused by the browser. Click anywhere on the page to start it.', 'warning');
+          s.addAlert(t('al_audioPaused'), 'warning');
         } else if (acoustic.silentForMs > 5000) {
           s.addAlert(
-            acoustic.source === 'mic'
-              ? 'The microphone is sending pure silence. Check it isn\'t muted (system settings or a mute key) and that the right mic is selected.'
-              : 'The shared tab is silent. Make sure something is playing in it and that "Share tab audio" was ticked.',
+            t(acoustic.source === 'mic' ? 'al_micSilent' : 'al_tabSilent'),
             'warning',
           );
         }
         if (acoustic.source === 'mic' && !acoustic.soundPresent && acoustic.silentForMs === 0) {
           quietSince ??= now;
           if (now - quietSince > 60000) {
-            s.addAlert('The mic hears only room noise. If your call is in headphones, the mic can\'t hear it: use "System (Tab Capture)" for web calls.', 'info');
+            s.addAlert(t('al_micRoom'), 'info');
             quietSince = now + 10 * 60000; // don't repeat for a while
           }
         } else if (acoustic.soundPresent) {

@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { mfiLevel } from '../lib/mfiCalculator';
+import { useT } from '../i18n';
 
 interface MFIGaugeProps {
   value: number | null; // 0 to 100, null while warming up
@@ -8,7 +9,6 @@ interface MFIGaugeProps {
 }
 
 const COLORS = { unknown: '#64748B', nominal: '#14B8A6', elevated: '#F59E0B', severe: '#F43F5E' };
-const LABELS = { unknown: 'Warming up', nominal: 'Low', elevated: 'Elevated', severe: 'High' };
 
 export const MFIGauge: React.FC<MFIGaugeProps> = ({ value, confidence }) => {
   const radius = 60;
@@ -18,7 +18,8 @@ export const MFIGauge: React.FC<MFIGaugeProps> = ({ value, confidence }) => {
   const strokeDashoffset = arcLength - (v / 100) * arcLength;
   const level = mfiLevel(value);
   const color = COLORS[level];
-  const confLabel = confidence >= 0.7 ? 'High' : confidence >= 0.4 ? 'Medium' : 'Low';
+  const t = useT();
+  const confLabel = t(confidence >= 0.7 ? 'cf_h' : confidence >= 0.4 ? 'cf_m' : 'cf_l');
 
   return (
     <div className="flex flex-col items-center">
@@ -40,11 +41,11 @@ export const MFIGauge: React.FC<MFIGaugeProps> = ({ value, confidence }) => {
             {value === null ? '--' : value.toFixed(0)}
             {value !== null && <span className="text-xl text-slate-400">%</span>}
           </span>
-          <span className="text-xs uppercase font-semibold mt-1" style={{ color }}>{LABELS[level]}</span>
+          <span className="text-xs uppercase font-semibold mt-1" style={{ color }}>{t(`lv_${level}`)}</span>
         </div>
       </div>
       {value !== null && (
-        <span className="text-xs text-slate-500 -mt-4">Confidence: {confLabel}</span>
+        <span className="text-xs text-slate-500 -mt-4">{t('g_conf', { v: confLabel })}</span>
       )}
     </div>
   );

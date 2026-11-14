@@ -2,11 +2,15 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { BrainCircuit, Activity, Eye, AudioWaveform, ArrowRight, ShieldCheck } from 'lucide-react';
 
+import { useT } from '../i18n';
+import { LanguageSelect } from './LanguageSelect';
+
 interface Props {
   onLaunch: () => void;
 }
 
 export const LandingPage: React.FC<Props> = ({ onLaunch }) => {
+  const t = useT();
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
@@ -49,6 +53,10 @@ export const LandingPage: React.FC<Props> = ({ onLaunch }) => {
         />
       </div>
 
+      <div className="absolute top-5 right-5 z-20">
+        <LanguageSelect />
+      </div>
+
       <motion.div 
         variants={containerVariants}
         initial="hidden"
@@ -67,7 +75,7 @@ export const LandingPage: React.FC<Props> = ({ onLaunch }) => {
             </h1>
           </div>
           <p className="text-2xl text-slate-300 max-w-3xl mx-auto mb-12 font-light leading-relaxed">
-            A privacy-first app that helps you measure and reduce fatigue during long hours of video calls and digital work.
+            {t('l_sub')}
           </p>
           <motion.button 
             whileHover={{ scale: 1.05 }}
@@ -75,22 +83,22 @@ export const LandingPage: React.FC<Props> = ({ onLaunch }) => {
             onClick={onLaunch}
             className="group relative px-10 py-5 bg-gradient-to-r from-baseline to-teal-400 text-slate-900 rounded-full font-bold text-xl transition-all shadow-[0_0_40px_rgba(20,184,166,0.4)] hover:shadow-[0_0_60px_rgba(20,184,166,0.6)] flex items-center gap-3 mx-auto"
           >
-            Open Dashboard
+            {t('l_open')}
             <ArrowRight className="w-6 h-6 group-hover:translate-x-1.5 transition-transform" />
           </motion.button>
         </motion.div>
 
         {/* Medical Principles */}
         <motion.div variants={itemVariants} className="w-full mb-20">
-          <h2 className="text-xl text-slate-400 mb-8 text-center font-semibold">How it works</h2>
+          <h2 className="text-xl text-slate-400 mb-8 text-center font-semibold">{t('l_how')}</h2>
           <div className="flex flex-col md:flex-row gap-12 justify-center w-full max-w-5xl mx-auto items-start">
             <div className="flex-1 flex flex-col items-center text-center group">
                <motion.div whileHover={{ y: -5 }} className="mb-6 text-slate-400 group-hover:text-baseline transition-colors duration-500">
                   <Activity className="w-12 h-12 stroke-[1.5]" />
                </motion.div>
-               <h3 className="text-xl font-medium text-white mb-4 tracking-wide">Reaction Speed</h3>
+               <h3 className="text-xl font-medium text-white mb-4 tracking-wide">{t('l_f1t')}</h3>
                <p className="text-slate-400 font-light leading-relaxed text-sm max-w-xs">
-                 A one-minute reaction test compares you with your own rested baseline. Reaction time measurably slows as you get tired.
+                 {t('l_f1d')}
                </p>
             </div>
 
@@ -100,9 +108,9 @@ export const LandingPage: React.FC<Props> = ({ onLaunch }) => {
                <motion.div whileHover={{ y: -5 }} className="mb-6 text-slate-400 group-hover:text-warning transition-colors duration-500">
                   <AudioWaveform className="w-12 h-12 stroke-[1.5]" />
                </motion.div>
-               <h3 className="text-xl font-medium text-white mb-4 tracking-wide">Audio Stress Monitor</h3>
+               <h3 className="text-xl font-medium text-white mb-4 tracking-wide">{t('l_f2t')}</h3>
                <p className="text-slate-400 font-light leading-relaxed text-sm max-w-xs">
-                 Measures how much loud, treble-heavy (2-4 kHz) sound you're exposed to, and can soften it for calls you join in the browser.
+                 {t('l_f2d')}
                </p>
             </div>
 
@@ -112,9 +120,9 @@ export const LandingPage: React.FC<Props> = ({ onLaunch }) => {
                <motion.div whileHover={{ y: -5 }} className="mb-6 text-slate-400 group-hover:text-severe transition-colors duration-500">
                   <Eye className="w-12 h-12 stroke-[1.5]" />
                </motion.div>
-               <h3 className="text-xl font-medium text-white mb-4 tracking-wide">Blink & Alertness</h3>
+               <h3 className="text-xl font-medium text-white mb-4 tracking-wide">{t('l_f3t')}</h3>
                <p className="text-slate-400 font-light leading-relaxed text-sm max-w-xs">
-                 Tracks eye closure (PERCLOS), blink length and eyelid droop. These are among the best-studied early signs of drowsiness.
+                 {t('l_f3d')}
                </p>
             </div>
           </div>
@@ -122,34 +130,34 @@ export const LandingPage: React.FC<Props> = ({ onLaunch }) => {
 
         {/* Instructions */}
         <motion.div variants={itemVariants} className="w-full max-w-4xl glass-panel p-10 mb-16 border border-slate-700/50 bg-slate-900/40">
-          <h3 className="text-3xl font-bold text-white mb-8 text-center">Getting Started</h3>
+          <h3 className="text-3xl font-bold text-white mb-8 text-center">{t('l_start')}</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="flex items-start gap-5">
               <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-baseline/20 text-baseline font-bold text-lg shrink-0 border border-baseline/30">1</span>
               <div>
-                <strong className="text-lg text-white block mb-1">Grant Permissions</strong>
-                <p className="text-slate-400 text-sm">Everything stays on your device. Allow camera and microphone access to begin (or just microphone if you prefer audio-only).</p>
+                <strong className="text-lg text-white block mb-1">{t('l_s1t')}</strong>
+                <p className="text-slate-400 text-sm">{t('l_s1d')}</p>
               </div>
             </div>
             <div className="flex items-start gap-5">
               <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-baseline/20 text-baseline font-bold text-lg shrink-0 border border-baseline/30">2</span>
               <div>
-                <strong className="text-lg text-white block mb-1">Quick Calibration</strong>
-                <p className="text-slate-400 text-sm">Look at and click 9 dots. This learns your normal eye openness, your posture and how your eyes map to the screen.</p>
+                <strong className="text-lg text-white block mb-1">{t('l_s2t')}</strong>
+                <p className="text-slate-400 text-sm">{t('l_s2d')}</p>
               </div>
             </div>
             <div className="flex items-start gap-5">
               <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-baseline/20 text-baseline font-bold text-lg shrink-0 border border-baseline/30">3</span>
               <div>
-                <strong className="text-lg text-white block mb-1">Join Your Call</strong>
-                <p className="text-slate-400 text-sm">Use your microphone, or share a web call's tab (with tab audio) so NeuroPulse can measure and soften harsh audio.</p>
+                <strong className="text-lg text-white block mb-1">{t('l_s3t')}</strong>
+                <p className="text-slate-400 text-sm">{t('l_s3d')}</p>
               </div>
             </div>
             <div className="flex items-start gap-5">
               <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-baseline/20 text-baseline font-bold text-lg shrink-0 border border-baseline/30">4</span>
               <div>
-                <strong className="text-lg text-white block mb-1">Review & Relax</strong>
-                <p className="text-slate-400 text-sm">Take the eye breaks it suggests, run a reaction test now and then, and click "Finish Session" for a summary.</p>
+                <strong className="text-lg text-white block mb-1">{t('l_s4t')}</strong>
+                <p className="text-slate-400 text-sm">{t('l_s4d')}</p>
               </div>
             </div>
           </div>
@@ -157,11 +165,11 @@ export const LandingPage: React.FC<Props> = ({ onLaunch }) => {
 
         <motion.div variants={itemVariants} className="flex items-center gap-3 px-6 py-3 bg-slate-900/80 rounded-full border border-slate-700/50 text-slate-400">
           <ShieldCheck className="w-5 h-5 text-baseline" />
-          <span className="font-medium tracking-wide text-sm">RUNS IN YOUR BROWSER &nbsp;|&nbsp; NOTHING IS UPLOADED</span>
+          <span className="font-medium tracking-wide text-sm">{t('l_badge')}</span>
         </motion.div>
 
         <motion.div variants={itemVariants} className="mt-16 text-center text-slate-500 text-sm pb-8">
-          <p>Made by Rajveer Sanghvi.</p>
+          <p>{t('l_made')}</p>
           <p>&copy; 2026</p>
         </motion.div>
 
